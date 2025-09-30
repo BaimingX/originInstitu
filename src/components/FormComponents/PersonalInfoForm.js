@@ -33,8 +33,6 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
   const { isSubmitting, submitStatus, submitForm, previewJSON, clearStatus, isPowerAutomateMode } = useFormSubmit();
   const [files, setFiles] = React.useState([]);
-  const [showJSONPreview, setShowJSONPreview] = useState(false);
-  const [jsonPreviewData, setJsonPreviewData] = useState(null);
   const [isTestValidating, setIsTestValidating] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -126,22 +124,6 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     options: qualificationRecognitionsOptions
   };
 
-  const handlePreviewJSON = (data) => {
-    try {
-      const preview = previewJSON(data);
-      setJsonPreviewData(preview);
-      setShowJSONPreview(true);
-
-      if (!preview.validation.isValid) {
-        toast.error(`JSON Preview validation failed: ${preview.validation.errors.join(', ')}`);
-      } else {
-        toast.success('JSON structure generated successfully!');
-      }
-    } catch (error) {
-      toast.error('Failed to generate JSON preview');
-      console.error('Preview error:', error);
-    }
-  };
 
   const handleTestValidation = async (data) => {
     setIsTestValidating(true);
@@ -890,55 +872,6 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           </div>
         </form>
 
-        {/* JSON Preview Modal */}
-        {showJSONPreview && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-semibold text-gray-800">JSON Structure Preview</h3>
-                  <button
-                    onClick={() => setShowJSONPreview(false)}
-                    className="text-gray-500 hover:text-gray-700 text-xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
-                {jsonPreviewData?.validation && (
-                  <div className={`mt-3 p-3 rounded-lg ${jsonPreviewData.validation.isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {jsonPreviewData.validation.isValid ? '✅ Validation Passed' : `❌ Validation Failed: ${jsonPreviewData.validation.errors.join(', ')}`}
-                  </div>
-                )}
-              </div>
-              <div className="p-6 overflow-auto max-h-[60vh]">
-                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-auto text-left">
-                  <code className="text-left">{jsonPreviewData?.formattedJSON}</code>
-                </pre>
-              </div>
-              <div className="p-6 border-t bg-gray-50">
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => {
-                      if (jsonPreviewData?.formattedJSON) {
-                        navigator.clipboard.writeText(jsonPreviewData.formattedJSON);
-                        toast.success('JSON copied to clipboard!');
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Copy JSON
-                  </button>
-                  <button
-                    onClick={() => setShowJSONPreview(false)}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* CRICOS Validation Errors Modal */}
         {showValidationErrors && (

@@ -420,13 +420,6 @@ export const FORM_FIELDS = {
     required: true,
     placeholder: 'Enter your birthplace'
   },
-  birthplace: {
-    name: 'birthplace',
-    label: 'Birthplace',
-    type: 'text',
-    required: false,
-    placeholder: 'Enter your birthplace (optional)'
-  },
   countryOfBirth: {
     name: 'countryOfBirth',
     label: 'Country of Birth',
