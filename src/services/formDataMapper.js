@@ -142,9 +142,14 @@ export const mapFormDataToJSON = (formData) => {
         OfferId: offerId,
         CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
         CampusId: 1, // Default campus
-        IntakeDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
-        StartDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
-        FinishDate: formatDate(new Date(Date.now() + 370 * 24 * 60 * 60 * 1000)), // 370 days later
+        IntakeDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
+        StartDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
+        FinishDate: (() => {
+          // Calculate finish date: 66 weeks (462 days) after intake date
+          const intakeDate = formData.selectedIntake ? new Date(formData.selectedIntake) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+          const finishDate = new Date(intakeDate.getTime() + 462 * 24 * 60 * 60 * 1000); // 66 weeks = 462 days
+          return formatDate(finishDate);
+        })(),
         ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
         TuitionFee: 0.0, // Would come from course pricing
         EnrolmentFee: 0.0, // Would come from course pricing
@@ -328,9 +333,14 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
         OfferId: offerId,
         CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
         CampusId: 1, // Default campus
-        IntakeDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
-        StartDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
-        FinishDate: formatDate(new Date(Date.now() + 370 * 24 * 60 * 60 * 1000)), // 370 days later
+        IntakeDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
+        StartDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
+        FinishDate: (() => {
+          // Calculate finish date: 66 weeks (462 days) after intake date
+          const intakeDate = formData.selectedIntake ? new Date(formData.selectedIntake) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+          const finishDate = new Date(intakeDate.getTime() + 462 * 24 * 60 * 60 * 1000); // 66 weeks = 462 days
+          return formatDate(finishDate);
+        })(),
         ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
         TuitionFee: 0.0, // Would come from course pricing
         EnrolmentFee: 0.0, // Would come from course pricing

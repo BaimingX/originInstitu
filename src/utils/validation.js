@@ -452,6 +452,11 @@ export const validationRules = {
     }
   },
 
+  // Course Intake Selection
+  selectedIntake: {
+    required: 'Please select your preferred intake date'
+  },
+
   // Terms and Conditions
   agreeToTerms: {
     required: 'Please agree to the terms and conditions'
@@ -2197,6 +2202,16 @@ export const FORM_FIELDS = {
     type: 'text',
     required: false,
     placeholder: 'Enter languages spoken (optional)'
+  },
+
+  // Course Intake Selection Section
+  selectedIntake: {
+    name: 'selectedIntake',
+    label: 'Preferred Course Intake Date',
+    type: 'select',
+    required: true,
+    placeholder: 'Please select your preferred intake date',
+    options: [] // Will be populated dynamically from API
   },
 
   // Terms and Conditions Section

@@ -15,6 +15,7 @@ import { fetchQualificationLevels, getDefaultQualificationLevels, fetchQualifica
 import { submitFormToPowerAutomate, checkPowerAutomateConfiguration } from '../../services/formSubmissionService';
 import { submitFilesToPowerAutomate, checkFileTestConfiguration, getFilesSummary } from '../../services/fileTestService';
 import { submitOfferWithValidation } from '../../services/cricosApiService';
+import { fetchCourseIntakes, getDefaultIntakeOptions } from '../../services/courseIntakeService';
 import SubmissionProgressModal from '../SubmissionProgressModal';
 import ApiTester from '../ApiTester';
 import PowerAutomateValidator from '../PowerAutomateValidator';
@@ -70,6 +71,11 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const [qualificationLevelsOptions, setQualificationLevelsOptions] = useState(getDefaultQualificationLevels());
   const [qualificationRecognitionsOptions, setQualificationRecognitionsOptions] = useState(getDefaultQualificationAchievementRecognitions());
   const [isFileTestLoading, setIsFileTestLoading] = useState(false);
+
+  // Course Intake Selection State
+  const [intakeOptions, setIntakeOptions] = useState(getDefaultIntakeOptions());
+  const [isLoadingIntakes, setIsLoadingIntakes] = useState(false);
+  const [intakeError, setIntakeError] = useState(null);
 
   // Progress Modal State
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
@@ -127,6 +133,46 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     loadCricosData();
   }, []);
 
+  // 加载课程入学日期数据
+  useEffect(() => {
+    const loadCourseIntakes = async () => {
+      setIsLoadingIntakes(true);
+      setIntakeError(null);
+
+      try {
+        console.log('🗓️ 开始加载课程入学日期...');
+
+        const result = await fetchCourseIntakes();
+
+        if (result.success && result.data.length > 0) {
+          setIntakeOptions(result.data);
+          console.log('✅ 课程入学日期加载成功:', result.data);
+        } else {
+          // 使用默认选项
+          console.warn('⚠️ 未找到课程入学日期，使用默认选项');
+          setIntakeOptions(getDefaultIntakeOptions());
+          setIntakeError('无法获取最新的入学日期，显示默认选项');
+          toast.error('无法获取最新入学日期，使用默认选项', {
+            duration: 4000,
+            position: 'bottom-right'
+          });
+        }
+      } catch (error) {
+        console.error('❌ 加载课程入学日期失败:', error);
+        setIntakeOptions(getDefaultIntakeOptions());
+        setIntakeError(`获取入学日期失败: ${error.message}`);
+        toast.error('获取入学日期失败，使用默认选项', {
+          duration: 5000,
+          position: 'bottom-right'
+        });
+      } finally {
+        setIsLoadingIntakes(false);
+      }
+    };
+
+    loadCourseIntakes();
+  }, []);
+
   // 创建动态的Employment Status字段配置
   const currentEmploymentStatusField = {
     ...FORM_FIELDS.currentEmploymentStatus,
@@ -155,6 +201,16 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const qualificationRecognitionField = {
     ...FORM_FIELDS.qualificationRecognition,
     options: qualificationRecognitionsOptions
+  };
+
+  // 创建动态的Course Intake字段配置
+  const selectedIntakeField = {
+    ...FORM_FIELDS.selectedIntake,
+    placeholder: isLoadingIntakes ? 'Loading intake dates...' : 'Please select your preferred intake date',
+    options: intakeOptions.map(intake => ({
+      value: intake.value,
+      label: intake.displayText
+    }))
   };
 
 
@@ -1147,7 +1203,53 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
             </div>
           </div>
 
-          {/* 12. Terms and Conditions */}
+          {/* 12. Course Intake Selection */}
+          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold text-gray-800 mb-6">Course Intake Selection</h2>
+
+            {/* Display error message if any */}
+            {intakeError && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-800 text-sm">
+                  <strong>Notice:</strong> {intakeError}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <FormField
+                field={selectedIntakeField}
+                register={register}
+                error={errors.selectedIntake}
+              />
+
+              {/* Information note */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Please select your preferred course intake date. This will be your intended start date for the Certificate V in Construction Management course.
+                  {isLoadingIntakes && (
+                    <span className="ml-2 text-blue-600">Loading available dates...</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Show retry button if there was an error */}
+              {intakeError && !isLoadingIntakes && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Trigger reload of intake data
+                    window.location.reload();
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Retry Loading Intake Dates
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 13. Terms and Conditions */}
           <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold text-gray-800 mb-6">Terms and Conditions</h2>
             <div className="mb-4">
