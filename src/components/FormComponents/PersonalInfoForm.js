@@ -14,6 +14,8 @@ import { fetchOccupationCodes, getDefaultOccupationCodes } from '../../services/
 import { fetchQualificationLevels, getDefaultQualificationLevels, fetchQualificationAchievementRecognitions, getDefaultQualificationAchievementRecognitions } from '../../services/educationDataService';
 import { submitFormToPowerAutomate, checkPowerAutomateConfiguration } from '../../services/formSubmissionService';
 import { submitFilesToPowerAutomate, checkFileTestConfiguration, getFilesSummary } from '../../services/fileTestService';
+import { submitOfferWithValidation } from '../../services/cricosApiService';
+import SubmissionProgressModal from '../SubmissionProgressModal';
 import ApiTester from '../ApiTester';
 import PowerAutomateValidator from '../PowerAutomateValidator';
 import toast from 'react-hot-toast';
@@ -68,6 +70,13 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const [qualificationLevelsOptions, setQualificationLevelsOptions] = useState(getDefaultQualificationLevels());
   const [qualificationRecognitionsOptions, setQualificationRecognitionsOptions] = useState(getDefaultQualificationAchievementRecognitions());
   const [isFileTestLoading, setIsFileTestLoading] = useState(false);
+
+  // Progress Modal State
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState('');
+  const [stepStatuses, setStepStatuses] = useState({});
+  const [progressErrors, setProgressErrors] = useState({});
+  const [isSubmissionComplete, setIsSubmissionComplete] = useState(false);
 
   // 确保页面加载时滚动到顶部
   useEffect(() => {
@@ -291,147 +300,183 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     return missing;
   };
 
+  const updateStepStatus = (stepId, status, error = null) => {
+    setStepStatuses(prev => ({ ...prev, [stepId]: status }));
+    if (error) {
+      setProgressErrors(prev => ({ ...prev, [stepId]: error }));
+    }
+    setCurrentStep(stepId);
+  };
+
+  const resetProgressModal = () => {
+    setIsProgressModalOpen(false);
+    setCurrentStep('');
+    setStepStatuses({});
+    setProgressErrors({});
+    setIsSubmissionComplete(false);
+  };
+
   const onSubmit = async (data) => {
     try {
-      // Step 1: Validate required files
+      // Pre-submission validation
       const missingFiles = validateRequiredFiles();
       if (missingFiles.length > 0) {
-        toast.error(`Missing required documents: ${missingFiles.join(', ')}`, { id: 'submit-flow' });
+        toast.error(`Missing required documents: ${missingFiles.join(', ')}`);
         return;
       }
 
-      // Step 2: Check Power Automate configuration
       const config = checkPowerAutomateConfiguration();
       if (!config.studentFlowConfigured) {
-        toast.error('Application submission is not configured. Please contact support.', { id: 'submit-flow' });
+        toast.error('Application submission is not configured. Please contact support.');
         return;
       }
 
-      // Step 3: Submit to Power Automate
-      toast.loading('Submitting your application...', { id: 'submit-flow' });
+      // Start progress modal
+      setIsProgressModalOpen(true);
+      setIsSubmissionComplete(false);
+      setProgressErrors({});
+      setStepStatuses({});
 
-      // Combine all files for submission
+      // Step 1: Preparing data
+      updateStepStatus('preparing', 'in-progress');
+
+      let jsonData;
+      try {
+        const preview = previewJSON(data);
+        if (!preview.validation.isValid) {
+          throw new Error(`Form validation failed: ${preview.validation.errors.join(', ')}`);
+        }
+        jsonData = preview.jsonData;
+        updateStepStatus('preparing', 'completed');
+      } catch (error) {
+        updateStepStatus('preparing', 'error', error.message);
+        return;
+      }
+
+      // Step 2: CRICOS validation
+      updateStepStatus('cricos-validation', 'in-progress');
+
+      try {
+        const validationResult = await testValidateOffer(jsonData);
+        if (validationResult.success) {
+          updateStepStatus('cricos-validation', 'completed');
+        } else {
+          const errorMessage = validationResult.errors?.length > 0
+            ? `${validationResult.errors.length} validation errors found`
+            : `CRICOS validation failed: ${validationResult.message}`;
+          throw new Error(errorMessage);
+        }
+      } catch (error) {
+        updateStepStatus('cricos-validation', 'error', error.message);
+        return;
+      }
+
+      // Step 3: CRICOS submission
+      updateStepStatus('cricos-submission', 'in-progress');
+
+      try {
+        const cricosResult = await submitOfferWithValidation(jsonData);
+        if (cricosResult.success) {
+          updateStepStatus('cricos-submission', 'completed');
+          if (!isProduction) {
+            console.log('✅ CRICOS submission successful:', cricosResult);
+          }
+        } else {
+          throw new Error(`CRICOS submission failed: ${cricosResult.message}`);
+        }
+      } catch (error) {
+        updateStepStatus('cricos-submission', 'error', error.message);
+        return;
+      }
+
+      // Step 4: Power Automate processing
+      updateStepStatus('power-automate', 'in-progress');
+
+      try {
+        const allFiles = [
+          ...Object.values(requiredFiles).filter(file => file !== null),
+          ...Object.values(optionalFiles).filter(file => file !== null)
+        ];
+
+        const submissionResult = await submitFormToPowerAutomate(data, allFiles, 'student');
+
+        if (submissionResult.success) {
+          updateStepStatus('power-automate', 'completed');
+          if (!isProduction) {
+            console.log('✅ Power Automate submission successful:', submissionResult);
+          }
+        } else {
+          throw new Error(submissionResult.message || 'Power Automate submission failed');
+        }
+      } catch (error) {
+        updateStepStatus('power-automate', 'error', error.message);
+        return;
+      }
+
+      // Step 5: File forwarding (if files are available)
       const allFiles = [
         ...Object.values(requiredFiles).filter(file => file !== null),
         ...Object.values(optionalFiles).filter(file => file !== null)
       ];
 
-      const submissionResult = await submitFormToPowerAutomate(data, allFiles, 'student');
+      if (allFiles.length > 0) {
+        updateStepStatus('file-forwarding', 'in-progress');
 
-      if (submissionResult.success) {
-        // Form data submission successful
-        toast.success('✅ Application data submitted successfully!', { id: 'submit-flow' });
+        try {
+          const fileConfig = checkFileTestConfiguration();
+          if (fileConfig.isConfigured) {
+            const fileSubmissionResult = await submitFilesToPowerAutomate(allFiles, data, {
+              source: 'main_submission',
+              formType: showAgentSelect ? 'agent-student-form' : 'student-form'
+            });
 
-        if (!isProduction) {
-          console.log('✅ Form submission successful:', submissionResult);
-          console.log('📋 Submitted data structure:', submissionResult.submittedData);
-        }
-
-        // Log the successful submission details
-        if (submissionResult.submittedData?.OfferId) {
-          if (!isProduction) {
-            console.log('📝 Submitted Offer ID:', submissionResult.submittedData.OfferId);
-          }
-        }
-
-        // Step 4: Submit files if available
-        if (allFiles.length > 0) {
-          toast.loading('📤 Submitting files for email forwarding...', { id: 'submit-flow' });
-
-          try {
-            // Check file test configuration
-            const fileConfig = checkFileTestConfiguration();
-            if (fileConfig.isConfigured) {
-              const fileSubmissionResult = await submitFilesToPowerAutomate(allFiles, data, {
-                source: 'main_submission',
-                formType: showAgentSelect ? 'agent-student-form' : 'student-form'
-              });
-
-              if (fileSubmissionResult.success) {
-                toast.success('🎉 Application and files submitted successfully!', { id: 'submit-flow' });
-                if (!isProduction) {
-                  console.log('✅ File submission also successful:', fileSubmissionResult);
-                }
-              } else {
-                // File submission failed, but form data was successful
-                toast.success('✅ Application submitted! File forwarding failed - please contact support.', {
-                  id: 'submit-flow',
-                  duration: 8000
-                });
-                if (!isProduction) {
-                  console.warn('⚠️ File submission failed:', fileSubmissionResult);
-                }
+            if (fileSubmissionResult.success) {
+              updateStepStatus('file-forwarding', 'completed');
+              if (!isProduction) {
+                console.log('✅ File forwarding successful:', fileSubmissionResult);
               }
             } else {
-              // File endpoint not configured
-              toast.success('✅ Application submitted successfully!', { id: 'submit-flow' });
-              if (!isProduction) {
-                console.log('ℹ️ File submission skipped - endpoint not configured');
-              }
+              throw new Error(fileSubmissionResult.message || 'File forwarding failed');
             }
-          } catch (fileError) {
-            // File submission error, but form data was successful
-            toast.success('✅ Application submitted! File forwarding encountered an error.', {
-              id: 'submit-flow',
-              duration: 8000
-            });
+          } else {
+            updateStepStatus('file-forwarding', 'completed');
             if (!isProduction) {
-              console.error('❌ File submission error:', fileError);
+              console.log('ℹ️ File forwarding skipped - endpoint not configured');
             }
           }
-        } else {
-          // No files to submit
-          toast.success('🎉 Application submitted successfully!', { id: 'submit-flow' });
+        } catch (error) {
+          updateStepStatus('file-forwarding', 'error', error.message);
+          return;
         }
-
-        // Reset form after all submissions
-        reset();
-        setRequiredFiles({
-          year12Evidence: null,
-          passport: null,
-          englishTest: null,
-          academicQualifications: null
-        });
-        setOptionalFiles({
-          cv: null,
-          statementOfPurpose: null,
-          financialDeclaration: null,
-          bankStatement: null,
-          sponsorDocuments: null
-        });
-        clearStatus();
-
-        // Show additional success information
-        toast.success('📧 You will receive a confirmation email shortly.', {
-          duration: 5000,
-          position: 'bottom-center'
-        });
-
       } else {
-        // Submission failed
-        if (submissionResult.validationErrors?.length > 0) {
-          // Form validation failed
-          toast.error(`Please check your form: ${submissionResult.validationErrors.join(', ')}`, {
-            id: 'submit-flow',
-            duration: 8000
-          });
-          setValidationErrors(submissionResult.validationErrors);
-          setShowValidationErrors(true);
-        } else {
-          // Network or server error
-          toast.error(submissionResult.message || 'Application submission failed. Please try again.', {
-            id: 'submit-flow',
-            duration: 8000
-          });
-        }
-
-        if (!isProduction) {
-          console.error('❌ Submission failed:', submissionResult);
-        }
+        // No files to forward, mark as completed
+        updateStepStatus('file-forwarding', 'completed');
       }
 
+      // Step 6: Completion
+      updateStepStatus('completion', 'completed');
+      setIsSubmissionComplete(true);
+
+      // Reset form after successful submission
+      reset();
+      setRequiredFiles({
+        year12Evidence: null,
+        passport: null,
+        englishTest: null,
+        academicQualifications: null
+      });
+      setOptionalFiles({
+        cv: null,
+        statementOfPurpose: null,
+        financialDeclaration: null,
+        bankStatement: null,
+        sponsorDocuments: null
+      });
+      clearStatus();
+
     } catch (error) {
-      toast.error('An unexpected error occurred. Please try again.', { id: 'submit-flow' });
+      const errorMessage = error.message || 'An unexpected error occurred during submission';
+      updateStepStatus(currentStep || 'preparing', 'error', errorMessage);
       if (!isProduction) {
         console.error('🚨 Submission error:', error);
       }
@@ -1437,6 +1482,16 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           onClose={() => setShowPowerAutomateValidator(false)}
           formData={control._formValues || {}}
           files={[...Object.values(requiredFiles), ...Object.values(optionalFiles)].filter(Boolean)}
+        />
+
+        {/* Submission Progress Modal */}
+        <SubmissionProgressModal
+          isOpen={isProgressModalOpen}
+          onClose={resetProgressModal}
+          currentStep={currentStep}
+          stepStatuses={stepStatuses}
+          errors={progressErrors}
+          isComplete={isSubmissionComplete}
         />
       </div>
     </div>
