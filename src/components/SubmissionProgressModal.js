@@ -84,7 +84,7 @@ const SubmissionProgressModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
         <div className="p-6">
           <div className="text-center mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -134,8 +134,45 @@ const SubmissionProgressModal = ({
                     </p>
 
                     {stepError && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                        <strong>Error:</strong> {stepError}
+                      <div className="mt-2">
+                        {typeof stepError === 'object' && stepError.details && stepError.details.length > 0 ? (
+                          <div className="bg-red-50 border border-red-200 rounded p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <strong className="text-red-800 text-sm">
+                                CRICOS Validation Errors ({stepError.details.length})
+                              </strong>
+                            </div>
+                            <div className="space-y-2 max-h-32 overflow-y-auto">
+                              {stepError.details.map((error, index) => (
+                                <div key={index} className="border-l-2 border-red-400 bg-white p-2 rounded-r text-xs">
+                                  <div className="flex items-start space-x-2">
+                                    <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex-shrink-0">
+                                      {index + 1}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="font-medium text-red-800 text-xs">{error.field}</h5>
+                                      <p className="text-red-700 text-xs mt-1">{error.message}</p>
+                                      {error.technical && (
+                                        <details className="mt-1">
+                                          <summary className="text-xs text-red-600 cursor-pointer hover:text-red-800">
+                                            Technical Details
+                                          </summary>
+                                          <p className="mt-1 text-xs text-gray-600 font-mono bg-gray-100 p-1 rounded">
+                                            {error.technical}
+                                          </p>
+                                        </details>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                            <strong>Error:</strong> {typeof stepError === 'object' ? stepError.message : stepError}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

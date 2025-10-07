@@ -300,10 +300,16 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     return missing;
   };
 
-  const updateStepStatus = (stepId, status, error = null) => {
+  const updateStepStatus = (stepId, status, error = null, detailedErrors = null) => {
     setStepStatuses(prev => ({ ...prev, [stepId]: status }));
     if (error) {
-      setProgressErrors(prev => ({ ...prev, [stepId]: error }));
+      setProgressErrors(prev => ({
+        ...prev,
+        [stepId]: {
+          message: error,
+          details: detailedErrors || null
+        }
+      }));
     }
     setCurrentStep(stepId);
   };
@@ -364,7 +370,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           const errorMessage = validationResult.errors?.length > 0
             ? `${validationResult.errors.length} validation errors found`
             : `CRICOS validation failed: ${validationResult.message}`;
-          throw new Error(errorMessage);
+          updateStepStatus('cricos-validation', 'error', errorMessage, validationResult.errors);
+          return;
         }
       } catch (error) {
         updateStepStatus('cricos-validation', 'error', error.message);
