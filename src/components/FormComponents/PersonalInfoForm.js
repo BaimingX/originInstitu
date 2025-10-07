@@ -7,21 +7,29 @@ import FileUpload from './FileUpload';
 import SubmitButton from './SubmitButton';
 import CollapsibleSection from './CollapsibleSection';
 import { useFormSubmit } from '../../hooks/useFormSubmit';
-import { testValidateOffer, submitOfferWithValidation } from '../../services/cricosApiService';
+import { testValidateOffer } from '../../services/cricosApiService';
 import { fetchEmploymentStatuses, getDefaultEmploymentStatuses } from '../../services/employmentStatusService';
 import { fetchIndustryOfEmployments, getDefaultIndustryOfEmployments } from '../../services/industryOfEmploymentService';
 import { fetchOccupationCodes, getDefaultOccupationCodes } from '../../services/occupationCodesService';
 import { fetchQualificationLevels, getDefaultQualificationLevels, fetchQualificationAchievementRecognitions, getDefaultQualificationAchievementRecognitions } from '../../services/educationDataService';
+import { submitFormToPowerAutomate, checkPowerAutomateConfiguration } from '../../services/formSubmissionService';
+import { submitFilesToPowerAutomate, checkFileTestConfiguration, getFilesSummary } from '../../services/fileTestService';
 import ApiTester from '../ApiTester';
+import PowerAutomateValidator from '../PowerAutomateValidator';
 import toast from 'react-hot-toast';
 
 const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
+  // Check if running in production mode
+  const isProduction = process.env.NODE_ENV === 'production' ||
+                       process.env.REACT_APP_PRODUCTION_MODE === 'true';
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
-    control
+    control,
+    getValues
   } = useForm();
 
   // Watch for conditional field dependencies
@@ -31,19 +39,35 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
 
-  const { isSubmitting, submitStatus, submitForm, previewJSON, clearStatus, isPowerAutomateMode } = useFormSubmit();
-  const [files, setFiles] = React.useState([]);
+  const { isSubmitting, submitStatus, previewJSON, clearStatus, isPowerAutomateMode } = useFormSubmit();
+  const [requiredFiles, setRequiredFiles] = React.useState({
+    year12Evidence: null,
+    passport: null,
+    englishTest: null,
+    academicQualifications: null
+  });
+  const [optionalFiles, setOptionalFiles] = React.useState({
+    cv: null,
+    statementOfPurpose: null,
+    financialDeclaration: null,
+    bankStatement: null,
+    sponsorDocuments: null
+  });
   const [isTestValidating, setIsTestValidating] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [apiResponseData, setApiResponseData] = useState(null);
   const [showApiDebug, setShowApiDebug] = useState(false);
   const [showApiTester, setShowApiTester] = useState(false);
+  const [showPowerAutomateValidator, setShowPowerAutomateValidator] = useState(false);
+  const [showJsonPreview, setShowJsonPreview] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
   const [employmentStatusOptions, setEmploymentStatusOptions] = useState(getDefaultEmploymentStatuses());
   const [industryOfEmploymentOptions, setIndustryOfEmploymentOptions] = useState(getDefaultIndustryOfEmployments());
   const [occupationCodesOptions, setOccupationCodesOptions] = useState(getDefaultOccupationCodes());
   const [qualificationLevelsOptions, setQualificationLevelsOptions] = useState(getDefaultQualificationLevels());
   const [qualificationRecognitionsOptions, setQualificationRecognitionsOptions] = useState(getDefaultQualificationAchievementRecognitions());
+  const [isFileTestLoading, setIsFileTestLoading] = useState(false);
 
   // 确保页面加载时滚动到顶部
   useEffect(() => {
@@ -125,6 +149,12 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   };
 
 
+  const handlePreviewJSON = (data) => {
+    const preview = previewJSON(data);
+    setPreviewData(preview);
+    setShowJsonPreview(true);
+  };
+
   const handleTestValidation = async (data) => {
     setIsTestValidating(true);
     try {
@@ -179,107 +209,268 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     }
   };
 
-
-  const onSubmit = async (data) => {
+  const handleFileTest = async () => {
+    setIsFileTestLoading(true);
     try {
-      // Step 1: Generate and validate JSON structure
-      toast.loading('Preparing submission...', { id: 'submit-flow' });
+      // 收集所有文件
+      const allFiles = [
+        ...Object.values(requiredFiles).filter(file => file !== null),
+        ...Object.values(optionalFiles).filter(file => file !== null)
+      ];
 
-      const preview = previewJSON(data);
-      if (!preview.validation.isValid) {
-        toast.error(`Form validation failed: ${preview.validation.errors.join(', ')}`, { id: 'submit-flow' });
+      if (allFiles.length === 0) {
+        toast.error('No files selected for testing', { id: 'file-test' });
         return;
       }
 
-      if (!preview.jsonData) {
-        toast.error('Failed to generate data structure for submission', { id: 'submit-flow' });
+      // 检查配置
+      const config = checkFileTestConfiguration();
+      if (!config.isConfigured) {
+        toast.error('File test endpoint is not configured', { id: 'file-test' });
         return;
       }
 
-      console.log('📋 Generated submission data:', preview.jsonData);
+      // 获取当前表单数据
+      const currentFormData = getValues();
 
-      // Step 2: Submit to CRICOS API with validation-first approach
-      toast.loading('Submitting to CRICOS API...', { id: 'submit-flow' });
+      // 显示文件摘要
+      const summary = getFilesSummary(allFiles);
+      const subject = currentFormData.firstName && currentFormData.familyName
+        ? `${currentFormData.firstName} ${currentFormData.familyName}'s Material Upload`
+        : currentFormData.firstName
+          ? `${currentFormData.firstName}'s Material Upload`
+          : currentFormData.familyName
+            ? `${currentFormData.familyName}'s Material Upload`
+            : 'Material Upload';
 
-      const cricosResult = await submitOfferWithValidation(preview.jsonData);
+      toast.loading(`Submitting ${summary.summary} for "${subject}"...`, { id: 'file-test' });
 
-      if (cricosResult.success) {
-        // CRICOS submission successful
-        toast.success('🎉 Application submitted successfully to CRICOS API!', { id: 'submit-flow' });
-        console.log('✅ CRICOS submission successful:', cricosResult);
+      // 提交文件 (传递表单数据用于生成subject)
+      const result = await submitFilesToPowerAutomate(allFiles, currentFormData, {
+        testSource: 'PersonalInfoForm',
+        formType: showAgentSelect ? 'agent-student-form' : 'student-form'
+      });
 
-        // Optional: Also submit to SharePoint/Power Automate as backup
-        try {
-          const backupResult = await submitForm(data, files);
-          console.log('📝 Backup submission to SharePoint completed:', backupResult);
-          toast.success('✅ Backup copy also saved to SharePoint!', { duration: 3000 });
-        } catch (backupError) {
-          console.warn('⚠️ Backup submission failed (CRICOS submission was successful):', backupError);
+      if (result.success) {
+        toast.success(`✅ Files submitted successfully! Subject: "${subject}" | ${summary.summary} forwarded via email.`, {
+          id: 'file-test',
+          duration: 6000
+        });
+
+        if (!isProduction) {
+          console.log('✅ File test successful:', result);
+          console.log('📋 Files submitted:', result.submissionDetails);
         }
-
-        // Log the successful submission details
-        if (preview.jsonData?.OfferId) {
-          console.log('Submitted Offer ID:', preview.jsonData.OfferId);
-        }
-
-        // Reset form on successful submission
-        reset();
-        setFiles([]);
-        clearStatus();
-
       } else {
-        // CRICOS submission failed
-        if (cricosResult.stage === 'validation' && cricosResult.errors?.length > 0) {
-          // Validation failed - show detailed errors
-          const errorCount = cricosResult.errors.length;
-          toast.error(`❌ CRICOS validation failed: ${errorCount} errors found. Please fix and try again.`, {
-            id: 'submit-flow',
-            duration: 8000
-          });
+        toast.error(`❌ File submission failed: ${result.message}`, {
+          id: 'file-test',
+          duration: 8000
+        });
 
-          // Set validation errors for user to view
-          setValidationErrors(cricosResult.errors);
-          setShowValidationErrors(true);
-          setApiResponseData(cricosResult);
-
-          console.error('❌ CRICOS validation failed:', cricosResult);
-        } else {
-          // Other submission error
-          toast.error(`❌ CRICOS submission failed: ${cricosResult.message}`, {
-            id: 'submit-flow',
-            duration: 8000
-          });
-          console.error('❌ CRICOS submission error:', cricosResult);
+        if (!isProduction) {
+          console.error('❌ File test failed:', result);
         }
       }
 
     } catch (error) {
-      toast.error(`Submission failed: ${error.message}`, { id: 'submit-flow' });
-      console.error('🚨 Submission error:', error);
+      toast.error('An unexpected error occurred during file testing', { id: 'file-test' });
+      if (!isProduction) {
+        console.error('🚨 File test error:', error);
+      }
+    } finally {
+      setIsFileTestLoading(false);
+    }
+  };
+
+  const validateRequiredFiles = () => {
+    const missing = [];
+    if (!requiredFiles.year12Evidence) missing.push("Evidence of Year 12 or Vocational Education");
+    if (!requiredFiles.passport) missing.push("Current Passport");
+    if (!requiredFiles.englishTest) missing.push("English Test Results");
+    if (!requiredFiles.academicQualifications) missing.push("Academic Qualifications & Transcripts");
+    return missing;
+  };
+
+  const onSubmit = async (data) => {
+    try {
+      // Step 1: Validate required files
+      const missingFiles = validateRequiredFiles();
+      if (missingFiles.length > 0) {
+        toast.error(`Missing required documents: ${missingFiles.join(', ')}`, { id: 'submit-flow' });
+        return;
+      }
+
+      // Step 2: Check Power Automate configuration
+      const config = checkPowerAutomateConfiguration();
+      if (!config.studentFlowConfigured) {
+        toast.error('Application submission is not configured. Please contact support.', { id: 'submit-flow' });
+        return;
+      }
+
+      // Step 3: Submit to Power Automate
+      toast.loading('Submitting your application...', { id: 'submit-flow' });
+
+      // Combine all files for submission
+      const allFiles = [
+        ...Object.values(requiredFiles).filter(file => file !== null),
+        ...Object.values(optionalFiles).filter(file => file !== null)
+      ];
+
+      const submissionResult = await submitFormToPowerAutomate(data, allFiles, 'student');
+
+      if (submissionResult.success) {
+        // Form data submission successful
+        toast.success('✅ Application data submitted successfully!', { id: 'submit-flow' });
+
+        if (!isProduction) {
+          console.log('✅ Form submission successful:', submissionResult);
+          console.log('📋 Submitted data structure:', submissionResult.submittedData);
+        }
+
+        // Log the successful submission details
+        if (submissionResult.submittedData?.OfferId) {
+          if (!isProduction) {
+            console.log('📝 Submitted Offer ID:', submissionResult.submittedData.OfferId);
+          }
+        }
+
+        // Step 4: Submit files if available
+        if (allFiles.length > 0) {
+          toast.loading('📤 Submitting files for email forwarding...', { id: 'submit-flow' });
+
+          try {
+            // Check file test configuration
+            const fileConfig = checkFileTestConfiguration();
+            if (fileConfig.isConfigured) {
+              const fileSubmissionResult = await submitFilesToPowerAutomate(allFiles, data, {
+                source: 'main_submission',
+                formType: showAgentSelect ? 'agent-student-form' : 'student-form'
+              });
+
+              if (fileSubmissionResult.success) {
+                toast.success('🎉 Application and files submitted successfully!', { id: 'submit-flow' });
+                if (!isProduction) {
+                  console.log('✅ File submission also successful:', fileSubmissionResult);
+                }
+              } else {
+                // File submission failed, but form data was successful
+                toast.success('✅ Application submitted! File forwarding failed - please contact support.', {
+                  id: 'submit-flow',
+                  duration: 8000
+                });
+                if (!isProduction) {
+                  console.warn('⚠️ File submission failed:', fileSubmissionResult);
+                }
+              }
+            } else {
+              // File endpoint not configured
+              toast.success('✅ Application submitted successfully!', { id: 'submit-flow' });
+              if (!isProduction) {
+                console.log('ℹ️ File submission skipped - endpoint not configured');
+              }
+            }
+          } catch (fileError) {
+            // File submission error, but form data was successful
+            toast.success('✅ Application submitted! File forwarding encountered an error.', {
+              id: 'submit-flow',
+              duration: 8000
+            });
+            if (!isProduction) {
+              console.error('❌ File submission error:', fileError);
+            }
+          }
+        } else {
+          // No files to submit
+          toast.success('🎉 Application submitted successfully!', { id: 'submit-flow' });
+        }
+
+        // Reset form after all submissions
+        reset();
+        setRequiredFiles({
+          year12Evidence: null,
+          passport: null,
+          englishTest: null,
+          academicQualifications: null
+        });
+        setOptionalFiles({
+          cv: null,
+          statementOfPurpose: null,
+          financialDeclaration: null,
+          bankStatement: null,
+          sponsorDocuments: null
+        });
+        clearStatus();
+
+        // Show additional success information
+        toast.success('📧 You will receive a confirmation email shortly.', {
+          duration: 5000,
+          position: 'bottom-center'
+        });
+
+      } else {
+        // Submission failed
+        if (submissionResult.validationErrors?.length > 0) {
+          // Form validation failed
+          toast.error(`Please check your form: ${submissionResult.validationErrors.join(', ')}`, {
+            id: 'submit-flow',
+            duration: 8000
+          });
+          setValidationErrors(submissionResult.validationErrors);
+          setShowValidationErrors(true);
+        } else {
+          // Network or server error
+          toast.error(submissionResult.message || 'Application submission failed. Please try again.', {
+            id: 'submit-flow',
+            duration: 8000
+          });
+        }
+
+        if (!isProduction) {
+          console.error('❌ Submission failed:', submissionResult);
+        }
+      }
+
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.', { id: 'submit-flow' });
+      if (!isProduction) {
+        console.error('🚨 Submission error:', error);
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      {/* 返回按钮 - 固定在左上角 */}
+      {/* 返回按钮 - 响应式定位 */}
       {onBackToHome && (
-        <div className="absolute top-8 left-8 z-10">
+        <div className="absolute top-4 left-4 sm:top-8 sm:left-8 z-10">
           <button
             onClick={onBackToHome}
-            className="flex items-center space-x-3 text-gray-600 hover:text-gray-800 transition-colors text-lg bg-white px-6 py-3 rounded-full shadow-md hover:shadow-lg"
+            className="flex items-center space-x-2 sm:space-x-3 text-gray-600 hover:text-gray-800 transition-colors text-sm sm:text-lg bg-white px-4 py-2 sm:px-6 sm:py-3 rounded-full shadow-md hover:shadow-lg"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
             <span className="font-medium">Back</span>
           </button>
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto p-4 sm:p-6 bg-white rounded-lg shadow-lg">
+      <div className={`max-w-4xl mx-auto p-4 sm:p-6 bg-white rounded-lg shadow-lg ${onBackToHome ? 'mt-16 sm:mt-4' : ''}`}>
         {/* 标题 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 text-center">
             Long Course Student Application Form
           </h1>
+
+          {/* English Only Instruction */}
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center justify-center space-x-2">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm font-medium text-amber-800 text-center">
+                <strong>Important:</strong> All information on this form must be completed in English only. Please ensure all personal details, addresses, and other text entries are written in English.
+              </p>
+            </div>
+          </div>
         </div>
         
         
@@ -472,6 +663,9 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   field={FORM_FIELDS.postalCountry}
                   register={register}
                   error={errors.postalCountry}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please select country' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalBuildingPropertyName}
@@ -487,31 +681,57 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   field={FORM_FIELDS.postalStreetNumber}
                   register={register}
                   error={errors.postalStreetNumber}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter street number' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalStreetName}
                   register={register}
                   error={errors.postalStreetName}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter street name' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalCityTownSuburb}
                   register={register}
                   error={errors.postalCityTownSuburb}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter city/town/suburb' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalState}
                   register={register}
                   error={errors.postalState}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter state' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalPostcode}
                   register={register}
                   error={errors.postalPostcode}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter postcode' : false,
+                    pattern: {
+                      value: /^[0-9]+$/,
+                      message: 'Please enter a valid postcode'
+                    }
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.postalMobilePhone}
                   register={register}
                   error={errors.postalMobilePhone}
+                  customValidation={{
+                    required: hasPostalAddress === 'Yes' ? 'Please enter mobile phone number' : false,
+                    pattern: {
+                      value: /^[0-9]+$/,
+                      message: 'Please enter a valid mobile phone number (numbers only)'
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -557,7 +777,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           </div>
 
           {/* 5. English Test (conditional) */}
-          {hasCompletedEnglishTest === 'Yes' && (
+          {hasCompletedEnglishTest === 'English test' && (
             <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
               <h2 className="text-xl font-semibold text-gray-800 mb-6">English Test</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -565,31 +785,89 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   field={FORM_FIELDS.englishTestType}
                   register={register}
                   error={errors.englishTestType}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please select test type' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.listeningScore}
                   register={register}
                   error={errors.listeningScore}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter listening score' : false,
+                    pattern: {
+                      value: /^\d*\.?\d*$/,
+                      message: 'Please enter a valid number'
+                    },
+                    min: {
+                      value: 0,
+                      message: 'Score must be 0 or greater'
+                    }
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.readingScore}
                   register={register}
                   error={errors.readingScore}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter reading score' : false,
+                    pattern: {
+                      value: /^\d*\.?\d*$/,
+                      message: 'Please enter a valid number'
+                    },
+                    min: {
+                      value: 0,
+                      message: 'Score must be 0 or greater'
+                    }
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.writingScore}
                   register={register}
                   error={errors.writingScore}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter writing score' : false,
+                    pattern: {
+                      value: /^\d*\.?\d*$/,
+                      message: 'Please enter a valid number'
+                    },
+                    min: {
+                      value: 0,
+                      message: 'Score must be 0 or greater'
+                    }
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.speakingScore}
                   register={register}
                   error={errors.speakingScore}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter speaking score' : false,
+                    pattern: {
+                      value: /^\d*\.?\d*$/,
+                      message: 'Please enter a valid number'
+                    },
+                    min: {
+                      value: 0,
+                      message: 'Score must be 0 or greater'
+                    }
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.overallScore}
                   register={register}
                   error={errors.overallScore}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter overall score' : false,
+                    pattern: {
+                      value: /^\d*\.?\d*$/,
+                      message: 'Please enter a valid number'
+                    },
+                    min: {
+                      value: 0,
+                      message: 'Score must be 0 or greater'
+                    }
+                  }}
                 />
               </div>
 
@@ -599,6 +877,18 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   field={FORM_FIELDS.engTestDate}
                   register={register}
                   error={errors.engTestDate}
+                  customValidation={{
+                    required: hasCompletedEnglishTest === 'English test' ? 'Please select test date' : false,
+                    validate: {
+                      notFuture: (value) => {
+                        if (!value) return true;
+                        const selectedDate = new Date(value);
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
+                        return selectedDate <= today || 'Test date cannot be in the future';
+                      }
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -635,26 +925,41 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   field={qualificationLevelField}
                   register={register}
                   error={errors.qualificationLevel}
+                  customValidation={{
+                    required: hasAchievedQualifications === 'Yes' ? 'Please select qualification level' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.qualificationName}
                   register={register}
                   error={errors.qualificationName}
+                  customValidation={{
+                    required: hasAchievedQualifications === 'Yes' ? 'Please enter qualification name' : false
+                  }}
                 />
                 <FormField
                   field={qualificationRecognitionField}
                   register={register}
                   error={errors.qualificationRecognition}
+                  customValidation={{
+                    required: hasAchievedQualifications === 'Yes' ? 'Please select qualification recognition' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.institutionName}
                   register={register}
                   error={errors.institutionName}
+                  customValidation={{
+                    required: hasAchievedQualifications === 'Yes' ? 'Please enter institution name' : false
+                  }}
                 />
                 <FormField
                   field={FORM_FIELDS.stateCountry}
                   register={register}
                   error={errors.stateCountry}
+                  customValidation={{
+                    required: hasAchievedQualifications === 'Yes' ? 'Please enter state/country' : false
+                  }}
                 />
               </div>
             </div>
@@ -811,59 +1116,81 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold text-gray-800 mb-6">File Upload</h2>
             <FileUpload
-              files={files}
-              setFiles={setFiles}
+              requiredFiles={requiredFiles}
+              setRequiredFiles={setRequiredFiles}
+              optionalFiles={optionalFiles}
+              setOptionalFiles={setOptionalFiles}
+              englishProficiencyMethod={hasCompletedEnglishTest}
             />
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Important:</strong> Only PDF files are accepted. Maximum file size: 5MB per file.
-              </p>
-            </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col space-y-4">
-            {/* Preview JSON Button */}
-            {/* <button
-              type="button"
-              onClick={handleSubmit(handlePreviewJSON)}
-              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              disabled={isSubmitting}
-            >
-              Preview JSON Structure
-            </button> */}
+            {/* Test buttons - hidden in production */}
+            {!isProduction && (
+              <>
+                {/* Preview JSON Button */}
+                <button
+                  type="button"
+                  onClick={handleSubmit(handlePreviewJSON)}
+                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  disabled={isSubmitting}
+                >
+                  Preview JSON Structure
+                </button>
 
-            {/* Test Validation Button */}
-            <button
-              type="button"
-              onClick={handleSubmit(handleTestValidation)}
-              className="w-full bg-yellow-600 text-white py-3 px-6 rounded-lg hover:bg-yellow-700 transition-colors font-medium"
-              disabled={isSubmitting || isTestValidating}
-            >
-              {isTestValidating ? 'Testing Validation...' : 'Test Validation'}
-            </button>
+                {/* Test Validation Button */}
+                <button
+                  type="button"
+                  onClick={handleSubmit(handleTestValidation)}
+                  className="w-full bg-yellow-600 text-white py-3 px-6 rounded-lg hover:bg-yellow-700 transition-colors font-medium"
+                  disabled={isSubmitting || isTestValidating}
+                >
+                  {isTestValidating ? 'Testing Validation...' : 'Test Validation'}
+                </button>
 
-            {/* API Tester Button */}
-            {/* <button
-              type="button"
-              onClick={() => setShowApiTester(true)}
-              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              🔧 通用 API 测试工具
-            </button> */}
+                {/* API Tester Button */}
+                {/* <button
+                  type="button"
+                  onClick={() => setShowApiTester(true)}
+                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  🔧 通用 API 测试工具
+                </button> */}
 
-            {/* View Last Validation Errors Button */}
-            {validationErrors.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowValidationErrors(true)}
-                className="w-full bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                🚨 View Last Validation Errors ({validationErrors.length})
-              </button>
+                {/* Power Automate Validator Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPowerAutomateValidator(true)}
+                  className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  🧪 Test Power Automate JSON Validation
+                </button>
+
+                {/* View Last Validation Errors Button */}
+                {validationErrors.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowValidationErrors(true)}
+                    className="w-full bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    🚨 View Last Validation Errors ({validationErrors.length})
+                  </button>
+                )}
+
+                {/* File Test Button */}
+                <button
+                  type="button"
+                  onClick={handleFileTest}
+                  className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  disabled={isSubmitting || isFileTestLoading}
+                >
+                  {isFileTestLoading ? '📤 Testing File Submission...' : '📎 Test File Submission to Email'}
+                </button>
+              </>
             )}
 
-            {/* Submit Button */}
+            {/* Submit Button - always visible */}
             <SubmitButton
               isSubmitting={isSubmitting}
               submitStatus={submitStatus}
@@ -1040,10 +1367,76 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         )}
 
 
+        {/* JSON Preview Modal */}
+        {showJsonPreview && previewData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold text-blue-600">
+                    📋 JSON Structure Preview
+                  </h3>
+                  <button
+                    onClick={() => setShowJsonPreview(false)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="text-gray-600 mt-2">
+                  Preview of the data structure that will be submitted
+                </p>
+              </div>
+              <div className="p-6 overflow-auto max-h-[60vh]">
+                {previewData.validation?.isValid ? (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-green-800 font-medium">✅ Validation: Passed</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-800 mb-2">Generated JSON Data:</h4>
+                      <pre className="text-sm bg-white p-4 rounded border overflow-auto max-h-96 text-gray-700 text-left">
+                        {JSON.stringify(previewData.jsonData, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-red-800 font-medium">❌ Validation: Failed</p>
+                      <ul className="mt-2 text-red-700 text-sm">
+                        {previewData.validation?.errors?.map((error, index) => (
+                          <li key={index}>• {error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="p-6 border-t bg-gray-50">
+                <button
+                  onClick={() => setShowJsonPreview(false)}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* API Tester Modal */}
         <ApiTester
           isOpen={showApiTester}
           onClose={() => setShowApiTester(false)}
+        />
+
+        {/* Power Automate Validator Modal */}
+        <PowerAutomateValidator
+          isOpen={showPowerAutomateValidator}
+          onClose={() => setShowPowerAutomateValidator(false)}
+          formData={control._formValues || {}}
+          files={[...Object.values(requiredFiles), ...Object.values(optionalFiles)].filter(Boolean)}
         />
       </div>
     </div>

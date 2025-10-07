@@ -1,3 +1,11 @@
+// English and numbers only validation function
+const validateEnglishAndNumbersOnly = (value) => {
+  if (!value) return true; // Skip validation for empty values (let required validation handle it)
+  // Allow letters, numbers, spaces, and common punctuation marks
+  const englishAndNumbersPattern = /^[a-zA-Z0-9\s\-.,'"()&@#$%/\\:;!?]*$/;
+  return englishAndNumbersPattern.test(value) || 'Please use English letters and numbers only';
+};
+
 export const validationRules = {
   // Personal Information
   title: {
@@ -12,12 +20,18 @@ export const validationRules = {
     maxLength: {
       value: 50,
       message: 'First name cannot exceed 50 characters'
+    },
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
     }
   },
   middleName: {
     maxLength: {
       value: 50,
       message: 'Middle name cannot exceed 50 characters'
+    },
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
     }
   },
   familyName: {
@@ -29,12 +43,18 @@ export const validationRules = {
     maxLength: {
       value: 50,
       message: 'Family name cannot exceed 50 characters'
+    },
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
     }
   },
   preferredName: {
     maxLength: {
       value: 50,
       message: 'Preferred name cannot exceed 50 characters'
+    },
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
     }
   },
   gender: {
@@ -70,7 +90,11 @@ export const validationRules = {
       message: 'Please enter a valid email address'
     }
   },
-  birthplace: {},
+  birthplace: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   countryOfBirth: {
     required: 'Please select your country of birth'
   },
@@ -78,7 +102,10 @@ export const validationRules = {
     required: 'Please select your nationality'
   },
   passportNumber: {
-    required: 'Please enter your passport number'
+    required: 'Please enter your passport number',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   passportExpiryDate: {
     required: 'Please select passport expiry date',
@@ -105,6 +132,9 @@ export const validationRules = {
     minLength: {
       value: 10,
       message: 'USI must be at least 10 characters'
+    },
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
     }
   },
 
@@ -112,19 +142,39 @@ export const validationRules = {
   currentCountry: {
     required: 'Please select your country'
   },
-  buildingPropertyName: {},
-  flatUnitDetails: {},
+  buildingPropertyName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  flatUnitDetails: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   streetNumber: {
-    required: 'Please enter street number'
+    required: 'Please enter street number',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   streetName: {
-    required: 'Please enter street name'
+    required: 'Please enter street name',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   cityTownSuburb: {
-    required: 'Please enter city/town/suburb'
+    required: 'Please enter city/town/suburb',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   state: {
-    required: 'Please enter state'
+    required: 'Please enter state',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   postcode: {
     required: 'Please enter postcode',
@@ -146,12 +196,32 @@ export const validationRules = {
 
   // Postal Address (conditional)
   postalCountry: {},
-  postalBuildingPropertyName: {},
-  postalFlatUnitDetails: {},
+  postalBuildingPropertyName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  postalFlatUnitDetails: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   postalStreetNumber: {},
-  postalStreetName: {},
-  postalCityTownSuburb: {},
-  postalState: {},
+  postalStreetName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  postalCityTownSuburb: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  postalState: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   postalPostcode: {
     pattern: {
       value: /^[0-9]+$/,
@@ -175,12 +245,16 @@ export const validationRules = {
   isEnglishMainLanguage: {
     required: 'Please select if English is your main language'
   },
-  languageSpokenAtHome: {},
+  languageSpokenAtHome: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   wasEnglishInstructionLanguage: {
     required: 'Please select if English was the language of instruction'
   },
   hasCompletedEnglishTest: {
-    required: 'Please select if you have completed an English test'
+    required: 'Please select how you complete English Language Proficiency'
   },
 
   // English Test (conditional)
@@ -258,10 +332,22 @@ export const validationRules = {
 
   // Qualification Details (conditional)
   qualificationLevel: {},
-  qualificationName: {},
+  qualificationName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   qualificationRecognition: {},
-  institutionName: {},
-  stateCountry: {},
+  institutionName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  stateCountry: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
 
   // Employment
   currentEmploymentStatus: {
@@ -274,10 +360,18 @@ export const validationRules = {
   howDidYouHearAboutUs: {
     required: 'Please select how you heard about us'
   },
-  howDidYouHearDetails: {},
+  howDidYouHearDetails: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
 
   // Agent Details (conditional)
-  agentName: {},
+  agentName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   agentEmail: {
     pattern: {
       value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
@@ -290,25 +384,54 @@ export const validationRules = {
     required: 'Please select contact type'
   },
   relationship: {
-    required: 'Please enter relationship'
+    required: 'Please enter relationship',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   contactGivenName: {
-    required: 'Please enter contact given name'
+    required: 'Please enter contact given name',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
   contactFamilyName: {
-    required: 'Please enter contact family name'
+    required: 'Please enter contact family name',
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
   },
-  contactFlatUnitDetails: {},
-  contactStreetAddress: {},
-  contactCityTownSuburb: {},
+  contactFlatUnitDetails: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  contactStreetAddress: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  contactCityTownSuburb: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   contactPostcode: {
     pattern: {
       value: /^[0-9]+$/,
       message: 'Please enter a valid postcode (numbers only)'
     }
   },
-  contactState: {},
-  contactCountry: {},
+  contactState: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  contactCountry: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
   contactEmail: {
     required: 'Please enter contact email',
     pattern: {
@@ -323,7 +446,11 @@ export const validationRules = {
       message: 'Please enter a valid mobile number'
     }
   },
-  contactLanguagesSpoken: {},
+  contactLanguagesSpoken: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
 
   // Terms and Conditions
   agreeToTerms: {
@@ -417,7 +544,7 @@ export const FORM_FIELDS = {
     name: 'birthplace',
     label: 'Birthplace',
     type: 'text',
-    required: true,
+    required: false,
     placeholder: 'Enter your birthplace'
   },
   countryOfBirth: {
@@ -1710,13 +1837,13 @@ export const FORM_FIELDS = {
   },
   hasCompletedEnglishTest: {
     name: 'hasCompletedEnglishTest',
-    label: 'Have you completed a test of English Language Proficiency?',
+    label: 'How do you complete English Language Proficiency?',
     type: 'select',
     required: true,
     placeholder: 'Please select',
     options: [
-      { value: 'Yes', label: 'Yes' },
-      { value: 'No', label: 'No' }
+      { value: 'English test', label: 'English test' },
+      { value: 'ELICOS Training', label: 'ELICOS Training' }
     ]
   },
   // English Test Section (conditional)
@@ -1810,7 +1937,7 @@ export const FORM_FIELDS = {
   },
   hasAchievedQualifications: {
     name: 'hasAchievedQualifications',
-    label: 'Have you achieved any qualifications?',
+    label: 'Have you achieved any education qualifications?',
     type: 'select',
     required: true,
     placeholder: 'Please select',

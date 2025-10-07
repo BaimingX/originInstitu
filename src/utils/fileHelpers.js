@@ -1,18 +1,13 @@
 // 文件验证辅助函数
 export const validateFile = (file) => {
-  const maxSize = 5 * 1024 * 1024; // 5MB
   const allowedTypes = [
     'application/pdf'
   ];
-  
-  if (file.size > maxSize) {
-    return 'File size cannot exceed 5MB';
-  }
-  
+
   if (!allowedTypes.includes(file.type)) {
     return 'Only PDF files are supported. Please upload PDF documents only';
   }
-  
+
   return null; // 验证通过
 };
 

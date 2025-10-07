@@ -2,6 +2,15 @@
 import { PublicClientApplication } from '@azure/msal-browser';
 import { msalConfig, loginRequest } from '../config/authConfig';
 
+// SharePoint站点和列表配置
+const SHAREPOINT_CONFIG = {
+  siteUrl: process.env.REACT_APP_SHAREPOINT_SITE_URL || "https://origininstitute.sharepoint.com/sites/OriginInstituteAdministrationTeam",
+  listName: process.env.REACT_APP_SHAREPOINT_LIST_NAME || "Long Course Student Application Data List",
+  listId: process.env.REACT_APP_SHAREPOINT_LIST_ID || "08d619d7-d12f-42c8-a0c9-e569e28e01a9",
+  agentListName: process.env.REACT_APP_SHAREPOINT_AGENT_LIST_NAME || "New Agent Application List",
+  agentListId: process.env.REACT_APP_SHAREPOINT_AGENT_LIST_ID || "e413dacf-63c7-4135-836d-82a8f5210dc3",
+};
+
 // 初始化MSAL实例
 const msalInstance = new PublicClientApplication(msalConfig);
 

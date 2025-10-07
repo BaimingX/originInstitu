@@ -2,11 +2,11 @@ import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { validationRules } from '../../utils/validation';
 
-const FormField = ({ field, register, error }) => {
+const FormField = ({ field, register, error, customValidation }) => {
   const { name, label, type, required, placeholder, maxLength, rows, options } = field;
 
   const renderInput = () => {
-    const validationRule = validationRules[name] || {};
+    const validationRule = customValidation || validationRules[name] || {};
     const commonProps = {
       ...register(name, validationRule),
       className: `w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-colors ${
@@ -77,7 +77,7 @@ const FormField = ({ field, register, error }) => {
       {renderInput()}
 
       {error && (
-        <div className="flex items-center space-x-1 text-error-red text-sm">
+        <div className="flex items-center space-x-1 text-error-red text-sm text-left">
           <AlertCircle size={16} />
           <span>{error.message}</span>
         </div>

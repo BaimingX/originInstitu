@@ -73,9 +73,11 @@ export const mapFormDataToJSON = (formData) => {
     FirstName: formData.firstName || "",
     MiddleName: formData.middleName || "",
     LastName: formData.familyName || "",
+    PreferredName: formData.preferredName || "",
     Gender: mapGender(formData.gender),
     DoB: formatDate(formData.dateOfBirth),
     Email: formData.email || "",
+    Birthplace: formData.birthplace || "",
     StudentOrigin: "OverseasStudent", // Default for offshore course
 
     // Compliance and Other Information
@@ -140,8 +142,8 @@ export const mapFormDataToJSON = (formData) => {
         OfferId: offerId,
         CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
         CampusId: 1, // Default campus
-        IntakeDate: formatDate(new Date()), // Default to current date
-        StartDate: formatDate(new Date()), // Default to current date
+        IntakeDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
+        StartDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
         FinishDate: formatDate(new Date(Date.now() + 370 * 24 * 60 * 60 * 1000)), // 370 days later
         ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
         TuitionFee: 0.0, // Would come from course pricing
@@ -165,7 +167,8 @@ export const mapFormDataToJSON = (formData) => {
       ContactName: `${formData.contactGivenName || ""} ${formData.contactFamilyName || ""}`.trim(),
       Address: `${formData.contactFlatUnitDetails || ""} ${formData.contactStreetAddress || ""} ${formData.contactCityTownSuburb || ""} ${formData.contactState || ""} ${formData.contactPostcode || ""} ${formData.contactCountry || ""}`.trim(),
       Phone: formData.contactMobile || "",
-      Email: formData.contactEmail || ""
+      Email: formData.contactEmail || "",
+      LanguagesSpoken: formData.contactLanguagesSpoken || ""
     },
 
     // Education History List
@@ -240,6 +243,172 @@ export const validateMappedData = (jsonData) => {
     isValid: errors.length === 0,
     errors
   };
+};
+
+/**
+ * Maps form data to Power Automate friendly JSON structure (flattened addresses)
+ * @param {Object} formData - Form data from react-hook-form
+ * @returns {Object} Mapped JSON object with flattened addresses
+ */
+export const mapFormDataToPowerAutomateJSON = (formData) => {
+  const offerId = generateOfferId();
+  const timestamp = formatDate(new Date());
+
+  // Base structure (same as original)
+  const mappedData = {
+    OfferId: offerId,
+    TimeStamp: timestamp,
+    Title: formData.title || "",
+    FirstName: formData.firstName || "",
+    MiddleName: formData.middleName || "",
+    LastName: formData.familyName || "",
+    PreferredName: formData.preferredName || "",
+    Gender: mapGender(formData.gender),
+    DoB: formatDate(formData.dateOfBirth),
+    Email: formData.email || "",
+    Birthplace: formData.birthplace || "",
+    StudentOrigin: "OverseasStudent", // Default for offshore course
+
+    // Compliance and Other Information (same as original)
+    ComplianceAndOtherInfo: {
+      OfferId: offerId,
+      CountryBirth: formData.countryOfBirth || "",
+      Nationality: mapNationality(formData.nationality, formData.countryOfBirth),
+      PassportNumber: formData.passportNumber || "",
+      PassportExpiryDate: formatDate(formData.passportExpiryDate),
+      VisaType: "Student Visa",
+      VisaNumber: "V0000000",
+      VisaExpiryDate: "",
+      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' ? 'English' : (formData.languageSpokenAtHome || ""),
+      HowWellEngSpeak: "",
+      StudyReason: "04", // Default value
+      CurrentEmployStatus: formData.currentEmploymentStatus || "",
+      IndustryEmployment: formData.industryOfEmployment || "",
+      OccupationCode: formData.occupationIdentifier || "",
+      USI: formData.usi || "",
+      IsAboriginal: formData.isAboriginal === 'Yes',
+      IsTorresStraitIslander: formData.isTorresStraitIslander === 'Yes',
+      IsEngLanguageInClass: formData.wasEnglishInstructionLanguage === 'Yes',
+      EngTestType: formData.englishTestType || "",
+      EngTestDate: formatDate(formData.engTestDate) || null,
+      EngTestListeningScore: formData.listeningScore || "",
+      EngTestReadingScore: formData.readingScore || "",
+      EngTestWritingScore: formData.writingScore || "",
+      EngTestSpeakingScore: formData.speakingScore || "",
+      EngTestOverallScore: formData.overallScore || "",
+      HighSchoolLevel: formData.highestSchoolLevel || "",
+      HighSchoolYearCompleted: "",
+      IsStillAtHighSchool: formData.isStillAttendingSchool === 'Yes',
+      SchoolType: "Government", // Default value
+      IsDisabled: false, // Default value - would need additional form fields
+      IsRequestHelpForDisabled: false // Default value - would need additional form fields
+    },
+
+    // Flattened Current Address
+    CurrentAddress: {
+      OfferId: offerId,
+      AddressType: "Current",
+      IsPrimary: true,
+      BuildingName: formData.buildingPropertyName || "",
+      FlatUnitDetail: formData.flatUnitDetails || "",
+      StreetNumber: formData.streetNumber || "",
+      StreetName: formData.streetName || "",
+      Suburb: formData.cityTownSuburb || "",
+      State: formData.state || "",
+      Postcode: formData.postcode || "",
+      Country: formData.currentCountry || "",
+      Phone: "",
+      Fax: "",
+      Mobile: formData.mobilePhone || ""
+    },
+
+    // Applied Courses array (same as original)
+    AppliedCourses: [
+      {
+        OfferId: offerId,
+        CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
+        CampusId: 1, // Default campus
+        IntakeDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
+        StartDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Default to one month later
+        FinishDate: formatDate(new Date(Date.now() + 370 * 24 * 60 * 60 * 1000)), // 370 days later
+        ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
+        TuitionFee: 0.0, // Would come from course pricing
+        EnrolmentFee: 0.0, // Would come from course pricing
+        MaterialFee: 0.0, // Would come from course pricing
+        UpfrontFee: 0.0, // Would come from course pricing
+        SpecialCondition: "",
+        ApplicationRequest: "",
+        Status: "Pending"
+      }
+    ],
+
+    // Disabilities array - empty by default as not collected in form
+    Disabilities: [],
+
+    // Emergency Contact (same as original)
+    EmergencyContact: {
+      OfferId: offerId,
+      ContactType: formData.contactType || "",
+      Relationship: formData.relationship || "",
+      ContactName: `${formData.contactGivenName || ""} ${formData.contactFamilyName || ""}`.trim(),
+      Address: `${formData.contactFlatUnitDetails || ""} ${formData.contactStreetAddress || ""} ${formData.contactCityTownSuburb || ""} ${formData.contactState || ""} ${formData.contactPostcode || ""} ${formData.contactCountry || ""}`.trim(),
+      Phone: formData.contactMobile || "",
+      Email: formData.contactEmail || "",
+      LanguagesSpoken: formData.contactLanguagesSpoken || ""
+    },
+
+    // Education History List (same as original)
+    EducationHistoryList: [],
+
+    // Employment History List (same as original)
+    EmploymentHistoryList: [],
+
+    // Marketing Campaign (same as original)
+    Leads_MarketingCampaign: {
+      OfferId: offerId,
+      KnowFrom: formData.howDidYouHearAboutUs || "",
+      LeadSource: formData.howDidYouHearAboutUs === 'Agent' ? 'Agent' : 'Direct',
+      CampaignName: formData.howDidYouHearDetails || "Website"
+    }
+  };
+
+  // Add postal address if different (flattened)
+  if (formData.hasPostalAddress === 'Yes') {
+    mappedData.PostalAddress = {
+      OfferId: offerId,
+      AddressType: "Postal",
+      IsPrimary: false,
+      BuildingName: formData.postalBuildingPropertyName || "",
+      FlatUnitDetail: formData.postalFlatUnitDetails || "",
+      StreetNumber: formData.postalStreetNumber || "",
+      StreetName: formData.postalStreetName || "",
+      Suburb: formData.postalCityTownSuburb || "",
+      State: formData.postalState || "",
+      Postcode: formData.postalPostcode || "",
+      Country: formData.postalCountry || "",
+      Phone: "",
+      Fax: "",
+      Mobile: formData.postalMobilePhone || ""
+    };
+  } else {
+    // Set PostalAddress to null when not provided
+    mappedData.PostalAddress = null;
+  }
+
+  // Add education history if qualifications achieved
+  if (formData.hasAchievedQualifications === 'Yes') {
+    mappedData.EducationHistoryList.push({
+      OfferId: offerId,
+      QualificationName: formData.qualificationName || "",
+      InstituteName: formData.institutionName || "",
+      InstituteLocation: formData.stateCountry || "",
+      YearCompleted: new Date().getFullYear(), // Default to current year
+      EducationLevelCode: formData.qualificationLevel || "",
+      AchievementRecognitionCode: formData.qualificationRecognition || ""
+    });
+  }
+
+  return mappedData;
 };
 
 /**
