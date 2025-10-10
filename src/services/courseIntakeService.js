@@ -98,9 +98,22 @@ export const fetchCourseIntakes = async (params = {}) => {
   try {
     console.log('🔍 开始获取课程入学日期...');
 
+    // 详细的环境变量调试信息
+    console.log('🔧 调试环境变量:');
+    console.log('  - API_BASE_URL:', !!API_BASE_URL, API_BASE_URL ? API_BASE_URL.substring(0, 50) + '...' : 'undefined');
+    console.log('  - API_USERNAME:', !!API_USERNAME, API_USERNAME ? API_USERNAME.substring(0, 5) + '...' : 'undefined');
+    console.log('  - API_PASSWORD:', !!API_PASSWORD, API_PASSWORD ? '***' : 'undefined');
+
     // 检查环境变量
     if (!API_BASE_URL || !API_USERNAME || !API_PASSWORD) {
-      throw new Error('CRICOS API 配置缺失。请检查环境变量：REACT_APP_CRICOS_API_BASE_URL, REACT_APP_CRICOS_API_USERNAME, REACT_APP_CRICOS_API_PASSWORD');
+      const missingVars = [];
+      if (!API_BASE_URL) missingVars.push('REACT_APP_CRICOS_API_BASE_URL');
+      if (!API_USERNAME) missingVars.push('REACT_APP_CRICOS_API_USERNAME');
+      if (!API_PASSWORD) missingVars.push('REACT_APP_CRICOS_API_PASSWORD');
+
+      const errorMsg = `CRICOS API 配置缺失。缺少环境变量：${missingVars.join(', ')}`;
+      console.error('❌', errorMsg);
+      throw new Error(errorMsg);
     }
 
     console.log('🔑 正在获取访问令牌...');
