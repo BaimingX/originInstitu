@@ -1,11 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { ArrowLeft } from 'lucide-react';
 import { FORM_FIELDS } from '../../utils/validation';
 import FormField from './FormField';
 import FileUpload from './FileUpload';
-import SubmitButton from './SubmitButton';
 import CollapsibleSection from './CollapsibleSection';
+import StepProgressBar from './StepProgressBar';
+import StepNavigation from './StepNavigation';
+import ReviewModal from './ReviewModal';
+import AgentSelector from './AgentSelector';
+import agentService from '../../services/agentService';
 import { useFormSubmit } from '../../hooks/useFormSubmit';
 import { testValidateOffer } from '../../services/cricosApiService';
 import { fetchEmploymentStatuses, getDefaultEmploymentStatuses } from '../../services/employmentStatusService';
@@ -32,8 +36,12 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     formState: { errors },
     reset,
     control,
-    getValues
-  } = useForm();
+    getValues,
+    trigger
+  } = useForm({
+    mode: 'onChange', // 启用实时验证
+    reValidateMode: 'onChange' // 修复错误后重新验证
+  });
 
   // Watch for conditional field dependencies
   const hasPostalAddress = useWatch({ control, name: 'hasPostalAddress' });
@@ -41,8 +49,9 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const hasCompletedEnglishTest = useWatch({ control, name: 'hasCompletedEnglishTest' });
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
+  const selectedAgent = useWatch({ control, name: 'selectedAgent' });
 
-  const { isSubmitting, submitStatus, previewJSON, clearStatus, isPowerAutomateMode } = useFormSubmit();
+  const { isSubmitting, previewJSON, clearStatus } = useFormSubmit();
   const [requiredFiles, setRequiredFiles] = React.useState({
     year12Evidence: null,
     passport: null,
@@ -59,6 +68,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const [isTestValidating, setIsTestValidating] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [fileValidationErrors, setFileValidationErrors] = useState([]);
   const [apiResponseData, setApiResponseData] = useState(null);
   const [showApiDebug, setShowApiDebug] = useState(false);
   const [showApiTester, setShowApiTester] = useState(false);
@@ -77,17 +87,359 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const [isLoadingIntakes, setIsLoadingIntakes] = useState(false);
   const [intakeError, setIntakeError] = useState(null);
 
-  // Progress Modal State
+  // Progress Modal State (existing submission progress)
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
-  const [currentStep, setCurrentStep] = useState('');
+  const [submissionStep, setSubmissionStep] = useState('preparing');
   const [stepStatuses, setStepStatuses] = useState({});
   const [progressErrors, setProgressErrors] = useState({});
   const [isSubmissionComplete, setIsSubmissionComplete] = useState(false);
+
+  // Multi-Step Form State
+  const [currentFormStep, setCurrentFormStep] = useState(() => {
+    const saved = localStorage.getItem('personalForm_currentStep');
+    return saved ? parseInt(saved) : 1;
+  });
+  const [completedSteps, setCompletedSteps] = useState(() => {
+    const saved = localStorage.getItem('personalForm_completedSteps');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [isStepValidating, setIsStepValidating] = useState(false);
+
+  // Review Modal State
+  const [showReviewModal, setShowReviewModal] = useState(false);
+
+  // Step field mappings using validation.js
+  const stepFields = {
+    1: showAgentSelect
+      ? ['selectedAgent', 'title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate']
+      : ['title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate'],
+    2: ['currentCountry', 'streetNumber', 'streetName', 'cityTownSuburb', 'state', 'postcode', 'mobilePhone', 'contactType', 'relationship', 'contactGivenName', 'contactFamilyName', 'contactEmail', 'contactMobile'],
+    3: ['isAboriginal', 'isTorresStraitIslander', 'isEnglishMainLanguage', 'wasEnglishInstructionLanguage', 'hasCompletedEnglishTest', 'highestSchoolLevel', 'isStillAttendingSchool', 'hasAchievedQualifications', 'currentEmploymentStatus', 'industryOfEmployment', 'occupationIdentifier'],
+    4: ['howDidYouHearAboutUs', 'selectedIntake', 'agreeToTerms']
+  };
 
   // 确保页面加载时滚动到顶部
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // 清理localStorage
+  const clearStorageProgress = useCallback(() => {
+    try {
+      localStorage.removeItem('personalForm_currentStep');
+      localStorage.removeItem('personalForm_completedSteps');
+      localStorage.removeItem('personalForm_data');
+      localStorage.removeItem('personalForm_timestamp');
+    } catch (error) {
+      console.warn('Failed to clear localStorage:', error);
+    }
+  }, []);
+
+  // 保存进度到localStorage
+  const saveProgressToStorage = useCallback(() => {
+    try {
+      const formData = getValues();
+      localStorage.setItem('personalForm_currentStep', currentFormStep.toString());
+      localStorage.setItem('personalForm_completedSteps', JSON.stringify([...completedSteps]));
+      localStorage.setItem('personalForm_data', JSON.stringify(formData));
+      localStorage.setItem('personalForm_timestamp', Date.now().toString());
+    } catch (error) {
+      console.warn('Failed to save form progress to localStorage:', error);
+    }
+  }, [currentFormStep, completedSteps, getValues]);
+
+  // 从localStorage恢复数据
+  const loadProgressFromStorage = useCallback(() => {
+    try {
+      const savedData = localStorage.getItem('personalForm_data');
+      const savedTimestamp = localStorage.getItem('personalForm_timestamp');
+
+      if (savedData && savedTimestamp) {
+        const dataAge = Date.now() - parseInt(savedTimestamp);
+        const maxAge = 24 * 60 * 60 * 1000; // 24小时
+
+        if (dataAge < maxAge) {
+          const parsedData = JSON.parse(savedData);
+          reset(parsedData);
+          console.log('Form data restored from localStorage');
+        } else {
+          // 清理过期数据
+          clearStorageProgress();
+          console.log('Expired form data cleared from localStorage');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load form progress from localStorage:', error);
+      clearStorageProgress();
+    }
+  }, [reset, clearStorageProgress]);
+
+  // 字段名映射 - 将技术字段名转换为用户友好的名称
+  const getFieldDisplayName = (fieldName) => {
+    const fieldMap = {
+      // Step 1: Personal Information
+      'title': 'Title',
+      'firstName': 'First Name',
+      'middleName': 'Middle Name',
+      'familyName': 'Family Name',
+      'preferredName': 'Preferred Name',
+      'gender': 'Gender',
+      'dateOfBirth': 'Date of Birth',
+      'email': 'Email Address',
+      'birthplace': 'Place of Birth',
+      'countryOfBirth': 'Country of Birth',
+      'nationality': 'Nationality',
+      'passportNumber': 'Passport Number',
+      'passportExpiryDate': 'Passport Expiry Date',
+      'usi': 'Unique Student Identifier (USI)',
+
+      // Step 2: Address and Contact
+      'currentCountry': 'Current Country',
+      'buildingPropertyName': 'Building/Property Name',
+      'flatUnitDetails': 'Flat/Unit Details',
+      'streetNumber': 'Street Number',
+      'streetName': 'Street Name',
+      'cityTownSuburb': 'City/Town/Suburb',
+      'state': 'State',
+      'postcode': 'Postcode',
+      'mobilePhone': 'Mobile Phone',
+      'contactType': 'Contact Type',
+      'relationship': 'Relationship',
+      'contactGivenName': 'Contact Given Name',
+      'contactFamilyName': 'Contact Family Name',
+      'contactEmail': 'Emergency Contact Email',
+      'contactMobile': 'Emergency Contact Mobile',
+
+      // Postal Address (conditional)
+      'postalCountry': 'Postal Country',
+      'postalBuildingPropertyName': 'Postal Building/Property Name',
+      'postalFlatUnitDetails': 'Postal Flat/Unit Details',
+      'postalStreetNumber': 'Postal Street Number',
+      'postalStreetName': 'Postal Street Name',
+      'postalCityTownSuburb': 'Postal City/Town/Suburb',
+      'postalState': 'Postal State',
+      'postalPostcode': 'Postal Postcode',
+
+      // Step 3: Education and Language
+      'isAboriginal': 'Aboriginal Status',
+      'isTorresStraitIslander': 'Torres Strait Islander Status',
+      'isEnglishMainLanguage': 'Is English Your Main Language',
+      'wasEnglishInstructionLanguage': 'Was English the Instruction Language',
+      'hasCompletedEnglishTest': 'English Test Completion',
+      'englishTestType': 'English Test Type',
+      'listeningScore': 'Listening Score',
+      'readingScore': 'Reading Score',
+      'writingScore': 'Writing Score',
+      'speakingScore': 'Speaking Score',
+      'overallScore': 'Overall Score',
+      'engTestDate': 'Test Date',
+      'highestSchoolLevel': 'Highest School Level',
+      'isStillAttendingSchool': 'Still Attending School',
+      'hasAchievedQualifications': 'Achieved Qualifications',
+      'qualificationLevel': 'Qualification Level',
+      'qualificationName': 'Qualification Name',
+      'qualificationRecognition': 'Achievement Recognition',
+      'institutionName': 'Institution Name',
+      'stateCountry': 'State/Country',
+      'currentEmploymentStatus': 'Current Employment Status',
+      'industryOfEmployment': 'Industry of Employment',
+      'occupationIdentifier': 'Occupation',
+
+      // Step 4: Course and Documents
+      'howDidYouHearAboutUs': 'How Did You Hear About Us',
+      'selectedIntake': 'Course Intake Selection',
+      'agreeToTerms': 'Terms and Conditions Agreement',
+
+      // Agent Selection
+      'selectedAgent': 'Selected Agent'
+    };
+
+    return fieldMap[fieldName] || fieldName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+  };
+
+  // 滚动到第一个错误字段
+  const scrollToFirstError = (errors) => {
+    if (errors.length > 0) {
+      const firstErrorField = errors[0];
+      const element = document.querySelector(`[name="${firstErrorField}"]`) ||
+                    document.querySelector(`input[name="${firstErrorField}"]`) ||
+                    document.querySelector(`select[name="${firstErrorField}"]`) ||
+                    document.querySelector(`textarea[name="${firstErrorField}"]`);
+
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          element.focus();
+        }, 500);
+      }
+    }
+  };
+
+  // 步骤验证函数 - 使用 react-hook-form 和 validation.js
+  const validateStep = async (stepNumber) => {
+    setIsStepValidating(true);
+    try {
+      // 获取当前表单数据用于条件判断
+      const formData = getValues();
+
+      // 获取当前步骤的基础字段
+      let fieldsToValidate = [...(stepFields[stepNumber] || [])];
+
+      // 条件性字段添加
+      if (stepNumber === 2) {
+        // Postal Address条件验证
+        if (formData.hasPostalAddress === 'Yes') {
+          fieldsToValidate.push('postalCountry', 'postalBuildingPropertyName', 'postalFlatUnitDetails',
+                              'postalStreetNumber', 'postalStreetName', 'postalCityTownSuburb',
+                              'postalState', 'postalPostcode');
+        }
+      }
+
+      if (stepNumber === 3) {
+        // 教育资格条件验证
+        if (formData.hasAchievedQualifications === 'Yes') {
+          fieldsToValidate.push('qualificationLevel', 'qualificationName',
+                              'qualificationRecognition', 'institutionName', 'stateCountry');
+        }
+
+        // English Test条件验证
+        if (formData.hasCompletedEnglishTest === 'English test') {
+          fieldsToValidate.push('englishTestType', 'listeningScore', 'readingScore',
+                              'writingScore', 'speakingScore', 'overallScore', 'engTestDate');
+        }
+      }
+
+      // 使用 react-hook-form 的 trigger 来验证字段
+      const isValid = await trigger(fieldsToValidate);
+
+      // 如果验证失败，处理错误显示
+      if (!isValid) {
+        // 找到当前步骤中有错误的字段
+        const errorFields = fieldsToValidate.filter(field => errors[field]);
+
+        // Step 4 还需要验证文件
+        let missingFiles = [];
+        if (stepNumber === 4) {
+          missingFiles = validateRequiredFiles();
+        }
+
+        // 组合字段错误和文件错误
+        const allErrorFields = [...errorFields, ...missingFiles];
+        const friendlyErrors = allErrorFields.map(field => getFieldDisplayName(field));
+
+        // 显示用户友好的错误提示
+        const stepNames = ['', 'Personal Information', 'Contact Details', 'Education & Language', 'Course & Documents'];
+        const stepName = stepNames[stepNumber] || `Step ${stepNumber}`;
+
+        if (friendlyErrors.length <= 3) {
+          toast.error(`Please complete the following required fields in ${stepName}: ${friendlyErrors.join(', ')}`, {
+            duration: 6000,
+            position: 'top-center',
+            style: {
+              maxWidth: '500px',
+            }
+          });
+        } else {
+          toast.error(`Please complete all required fields in ${stepName}. ${friendlyErrors.length} fields need to be filled.`, {
+            duration: 5000,
+            position: 'top-center',
+            style: {
+              maxWidth: '400px',
+            }
+          });
+        }
+
+        // 滚动到第一个错误字段
+        if (allErrorFields.length > 0) {
+          scrollToFirstError(allErrorFields);
+        }
+
+        // 验证失败时不需要更新 stepValidation state，因为这会导致按钮永久禁用
+        return false;
+      }
+
+      // 验证成功，可以进入下一步
+      return true;
+    } catch (error) {
+      console.error('Step validation error:', error);
+      toast.error('An error occurred while validating the form. Please try again.', {
+        duration: 4000,
+        position: 'top-center'
+      });
+      return false;
+    } finally {
+      setIsStepValidating(false);
+    }
+  };
+
+  // 步骤导航函数
+  const goToStep = (stepNumber) => {
+    if (stepNumber >= 1 && stepNumber <= 4) {
+      setCurrentFormStep(stepNumber);
+      saveProgressToStorage();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goToNextStep = async () => {
+    const isValid = await validateStep(currentFormStep);
+    if (isValid) {
+      setCompletedSteps(prev => new Set([...prev, currentFormStep]));
+      if (currentFormStep < 4) {
+        goToStep(currentFormStep + 1);
+      }
+    }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentFormStep > 1) {
+      goToStep(currentFormStep - 1);
+    }
+  };
+
+  // 恢复保存的数据
+  useEffect(() => {
+    loadProgressFromStorage();
+  }, [loadProgressFromStorage]);
+
+  // 注册selectedAgent字段 (if showAgentSelect is true)
+  useEffect(() => {
+    const needsAgent = showAgentSelect || howDidYouHearAboutUs === 'Agent';
+    register('selectedAgent', {
+      required: needsAgent ? 'Please select an agent' : false
+    });
+  }, [register, showAgentSelect, howDidYouHearAboutUs]);
+
+  useEffect(() => {
+    if (howDidYouHearAboutUs !== 'Agent') {
+      const formValues = getValues();
+      formValues.selectedAgent = '';
+      formValues.agentName = '';
+      formValues.agentEmail = '';
+      reset(formValues);
+    }
+  }, [howDidYouHearAboutUs]);
+
+  // 定期保存进度
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (currentFormStep && getValues) {
+        saveProgressToStorage();
+      }
+    }, 30000); // 每30秒保存一次
+
+    return () => clearInterval(interval);
+  }, [currentFormStep, getValues, saveProgressToStorage]);
+
+  // 页面卸载时保存进度
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveProgressToStorage();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveProgressToStorage]);
 
   // 加载所有CRICOS分类数据
   useEffect(() => {
@@ -356,6 +708,67 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     return missing;
   };
 
+  // Comprehensive pre-submit validation function
+  const validateAllRequiredFields = async () => {
+    const formData = getValues();
+    const allRequiredFields = new Set(); // Use Set to avoid duplicates
+
+    // Get all base required fields from all steps
+    [...stepFields[1], ...stepFields[2], ...stepFields[3], ...stepFields[4]].forEach(field => {
+      allRequiredFields.add(field);
+    });
+
+    // Add conditional fields based on user selections
+    if (formData.hasPostalAddress === 'Yes') {
+      ['postalCountry', 'postalStreetNumber', 'postalStreetName',
+       'postalCityTownSuburb', 'postalState', 'postalPostcode'].forEach(field => {
+        allRequiredFields.add(field);
+      });
+    }
+
+    // Agent selection - only add if not already in stepFields and condition is met
+    const needsAgent = showAgentSelect || formData.howDidYouHearAboutUs === 'Agent';
+    if (needsAgent) {
+      allRequiredFields.add('selectedAgent');
+    }
+
+    if (formData.hasCompletedEnglishTest === 'English test') {
+      ['englishTestType', 'listeningScore', 'readingScore',
+       'writingScore', 'speakingScore', 'overallScore', 'engTestDate'].forEach(field => {
+        allRequiredFields.add(field);
+      });
+    }
+
+    if (formData.hasAchievedQualifications === 'Yes') {
+      ['qualificationLevel', 'qualificationName', 'qualificationRecognition',
+       'institutionName', 'stateCountry'].forEach(field => {
+        allRequiredFields.add(field);
+      });
+    }
+
+    // Convert Set back to Array for validation
+    const fieldsToValidate = Array.from(allRequiredFields);
+
+    // Use react-hook-form trigger to validate all fields
+    const isFormValid = await trigger(fieldsToValidate);
+
+    // Check for form field errors
+    const fieldErrors = fieldsToValidate.filter(field => errors[field]);
+
+    // Check for missing files
+    const missingFiles = validateRequiredFiles();
+
+    // Combine all validation results
+    const allErrors = [...fieldErrors, ...missingFiles];
+
+    return {
+      isValid: isFormValid && missingFiles.length === 0,
+      fieldErrors,
+      missingFiles,
+      allErrors
+    };
+  };
+
   const updateStepStatus = (stepId, status, error = null, detailedErrors = null) => {
     setStepStatuses(prev => ({ ...prev, [stepId]: status }));
     if (error) {
@@ -367,15 +780,82 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         }
       }));
     }
-    setCurrentStep(stepId);
+    setSubmissionStep(stepId);
   };
 
   const resetProgressModal = () => {
     setIsProgressModalOpen(false);
-    setCurrentStep('');
+    setSubmissionStep('');
     setStepStatuses({});
     setProgressErrors({});
     setIsSubmissionComplete(false);
+  };
+
+  // Review Modal handlers
+  const handleReviewSubmit = async () => {
+    try {
+      // 执行全面的预提交验证
+      const validationResult = await validateAllRequiredFields();
+
+      if (!validationResult.isValid) {
+        // 设置文件验证错误状态
+        setFileValidationErrors(validationResult.missingFiles);
+
+        // 收集所有错误信息
+        const friendlyErrors = validationResult.allErrors.map(field => getFieldDisplayName(field));
+
+        // 显示错误提示
+        if (friendlyErrors.length <= 3) {
+          toast.error(`Please complete the following required fields: ${friendlyErrors.join(', ')}`, {
+            duration: 6000,
+            position: 'top-center',
+            style: {
+              maxWidth: '500px',
+            }
+          });
+        } else {
+          toast.error(`Please complete all required fields. ${friendlyErrors.length} fields need to be filled.`, {
+            duration: 5000,
+            position: 'top-center',
+            style: {
+              maxWidth: '400px',
+            }
+          });
+        }
+
+        // 滚动到第一个错误字段
+        if (validationResult.fieldErrors.length > 0) {
+          scrollToFirstError(validationResult.fieldErrors);
+        }
+
+        return; // 不显示review modal
+      }
+
+      // 清除文件验证错误状态（如果验证通过）
+      setFileValidationErrors([]);
+
+      // 验证通过，显示Review Modal
+      setShowReviewModal(true);
+    } catch (error) {
+      console.error('Pre-submit validation error:', error);
+      toast.error('An error occurred while validating the form. Please try again.', {
+        duration: 4000,
+        position: 'top-center'
+      });
+    }
+  };
+
+  const handleConfirmSubmit = () => {
+    // 关闭Review Modal并执行原有的submit流程
+    setShowReviewModal(false);
+
+    // 使用handleSubmit来触发表单验证和提交
+    handleSubmit(onSubmit)();
+  };
+
+  const handleEditFromReview = () => {
+    // 关闭Review Modal，用户可以继续编辑
+    setShowReviewModal(false);
   };
 
   const onSubmit = async (data) => {
@@ -539,7 +1019,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
     } catch (error) {
       const errorMessage = error.message || 'An unexpected error occurred during submission';
-      updateStepStatus(currentStep || 'preparing', 'error', errorMessage);
+      const currentSubmissionStep = submissionStep || 'preparing';
+      updateStepStatus(currentSubmissionStep, 'error', errorMessage);
       if (!isProduction) {
         console.error('🚨 Submission error:', error);
       }
@@ -547,812 +1028,888 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-4 md:py-8">
       {/* 返回按钮 - 响应式定位 */}
       {onBackToHome && (
-        <div className="absolute top-4 left-4 sm:top-8 sm:left-8 z-10">
+        <div className="absolute top-2 left-2 sm:top-4 sm:left-4 md:top-8 md:left-8 z-10">
           <button
             onClick={onBackToHome}
-            className="flex items-center space-x-2 sm:space-x-3 text-gray-600 hover:text-gray-800 transition-colors text-sm sm:text-lg bg-white px-4 py-2 sm:px-6 sm:py-3 rounded-full shadow-md hover:shadow-lg"
+            className="flex items-center space-x-1 sm:space-x-2 md:space-x-3 text-gray-600 hover:text-gray-800 transition-colors text-xs sm:text-sm md:text-lg bg-white px-2 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 rounded-full shadow-md hover:shadow-lg"
           >
-            <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
+            <ArrowLeft size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
             <span className="font-medium">Back</span>
           </button>
         </div>
       )}
 
-      <div className={`max-w-4xl mx-auto p-4 sm:p-6 bg-white rounded-lg shadow-lg ${onBackToHome ? 'mt-16 sm:mt-4' : ''}`}>
+      <div className={`max-w-4xl mx-auto p-3 sm:p-4 md:p-6 bg-white rounded-lg shadow-lg ${onBackToHome ? 'mt-12 sm:mt-16 md:mt-4' : ''}`}>
         {/* 标题 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 text-center">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 text-center">
             Long Course Student Application Form
           </h1>
 
           {/* English Only Instruction */}
-          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="mt-3 md:mt-4 p-3 md:p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <div className="flex items-center justify-center space-x-2">
-              <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
-              <p className="text-sm font-medium text-amber-800 text-center">
+              <p className="text-xs sm:text-sm font-medium text-amber-800 text-center">
                 <strong>Important:</strong> All information on this form must be completed in English only. Please ensure all personal details, addresses, and other text entries are written in English.
               </p>
             </div>
           </div>
         </div>
-        
-        
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
-          {/* Agent选择 - 仅在showAgentSelect为true时显示 */}
-          {showAgentSelect && (
-            <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">Agent Selection</h2>
-              <FormField
-                field={FORM_FIELDS.selectedAgent}
-                register={register}
-                error={errors.selectedAgent}
-              />
-              <p className="text-sm text-gray-600 mt-2">
-                Please select your assigned agent from the list above
-              </p>
-            </div>
-          )}
 
-          {/* 1. Personal Information */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Personal Information</h2>
+        {/* 步骤进度条 */}
+        <StepProgressBar
+          currentStep={currentFormStep}
+          completedSteps={completedSteps}
+          onStepClick={goToStep}
+        />
 
-            {/* Basic Information Panel */}
-            <CollapsibleSection
-              title="Basic Information"
-              defaultOpen={true}
-              description="Essential personal details and contact information"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.title}
-                  register={register}
-                  error={errors.title}
-                />
-                <FormField
-                  field={FORM_FIELDS.firstName}
-                  register={register}
-                  error={errors.firstName}
-                />
-                <FormField
-                  field={FORM_FIELDS.middleName}
-                  register={register}
-                  error={errors.middleName}
-                />
-                <FormField
-                  field={FORM_FIELDS.familyName}
-                  register={register}
-                  error={errors.familyName}
-                />
-                <FormField
-                  field={FORM_FIELDS.preferredName}
-                  register={register}
-                  error={errors.preferredName}
-                />
-                <FormField
-                  field={FORM_FIELDS.gender}
-                  register={register}
-                  error={errors.gender}
-                />
-                <FormField
-                  field={FORM_FIELDS.dateOfBirth}
-                  register={register}
-                  error={errors.dateOfBirth}
-                />
-                <FormField
-                  field={FORM_FIELDS.email}
-                  register={register}
-                  error={errors.email}
-                />
-              </div>
-            </CollapsibleSection>
-
-            {/* Birth & Identity Details Panel */}
-            <CollapsibleSection
-              title="Birth & Identity Details"
-              defaultOpen={true}
-              description="Place of birth and nationality information"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.birthplace}
-                  register={register}
-                  error={errors.birthplace}
-                />
-                <FormField
-                  field={FORM_FIELDS.countryOfBirth}
-                  register={register}
-                  error={errors.countryOfBirth}
-                />
-                <FormField
-                  field={FORM_FIELDS.nationality}
-                  register={register}
-                  error={errors.nationality}
-                />
-              </div>
-            </CollapsibleSection>
-
-            {/* Passport & Documentation Panel */}
-            <CollapsibleSection
-              title="Passport & Documentation"
-              defaultOpen={true}
-              description="Travel documents and student identification"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.passportNumber}
-                  register={register}
-                  error={errors.passportNumber}
-                />
-                <FormField
-                  field={FORM_FIELDS.passportExpiryDate}
-                  register={register}
-                  error={errors.passportExpiryDate}
-                />
-                <FormField
-                  field={FORM_FIELDS.usi}
-                  register={register}
-                  error={errors.usi}
-                />
-              </div>
-            </CollapsibleSection>
-          </div>
-
-          {/* 2. Current Address */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Current Address</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <FormField
-                field={FORM_FIELDS.currentCountry}
-                register={register}
-                error={errors.currentCountry}
-              />
-              <FormField
-                field={FORM_FIELDS.buildingPropertyName}
-                register={register}
-                error={errors.buildingPropertyName}
-              />
-              <FormField
-                field={FORM_FIELDS.flatUnitDetails}
-                register={register}
-                error={errors.flatUnitDetails}
-              />
-              <FormField
-                field={FORM_FIELDS.streetNumber}
-                register={register}
-                error={errors.streetNumber}
-              />
-              <FormField
-                field={FORM_FIELDS.streetName}
-                register={register}
-                error={errors.streetName}
-              />
-              <FormField
-                field={FORM_FIELDS.cityTownSuburb}
-                register={register}
-                error={errors.cityTownSuburb}
-              />
-              <FormField
-                field={FORM_FIELDS.state}
-                register={register}
-                error={errors.state}
-              />
-              <FormField
-                field={FORM_FIELDS.postcode}
-                register={register}
-                error={errors.postcode}
-              />
-              <FormField
-                field={FORM_FIELDS.mobilePhone}
-                register={register}
-                error={errors.mobilePhone}
-              />
-            </div>
-            <div className="mt-6">
-              <FormField
-                field={FORM_FIELDS.hasPostalAddress}
-                register={register}
-                error={errors.hasPostalAddress}
-              />
-            </div>
-          </div>
-
-          {/* 3. Postal Address (conditional) */}
-          {hasPostalAddress === 'Yes' && (
-            <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">Postal Address</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.postalCountry}
-                  register={register}
-                  error={errors.postalCountry}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please select country' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalBuildingPropertyName}
-                  register={register}
-                  error={errors.postalBuildingPropertyName}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalFlatUnitDetails}
-                  register={register}
-                  error={errors.postalFlatUnitDetails}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalStreetNumber}
-                  register={register}
-                  error={errors.postalStreetNumber}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter street number' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalStreetName}
-                  register={register}
-                  error={errors.postalStreetName}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter street name' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalCityTownSuburb}
-                  register={register}
-                  error={errors.postalCityTownSuburb}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter city/town/suburb' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalState}
-                  register={register}
-                  error={errors.postalState}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter state' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalPostcode}
-                  register={register}
-                  error={errors.postalPostcode}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter postcode' : false,
-                    pattern: {
-                      value: /^[0-9]+$/,
-                      message: 'Please enter a valid postcode'
-                    }
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.postalMobilePhone}
-                  register={register}
-                  error={errors.postalMobilePhone}
-                  customValidation={{
-                    required: hasPostalAddress === 'Yes' ? 'Please enter mobile phone number' : false,
-                    pattern: {
-                      value: /^[0-9]+$/,
-                      message: 'Please enter a valid mobile phone number (numbers only)'
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 4. Language and Cultural Diversity */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Language and Cultural Diversity</h2>
-            <div className="space-y-8">
-              <FormField
-                field={FORM_FIELDS.isAboriginal}
-                register={register}
-                error={errors.isAboriginal}
-              />
-              <FormField
-                field={FORM_FIELDS.isTorresStraitIslander}
-                register={register}
-                error={errors.isTorresStraitIslander}
-              />
-              <FormField
-                field={FORM_FIELDS.isEnglishMainLanguage}
-                register={register}
-                error={errors.isEnglishMainLanguage}
-              />
-              {isEnglishMainLanguage === 'No' && (
-                <FormField
-                  field={FORM_FIELDS.languageSpokenAtHome}
-                  register={register}
-                  error={errors.languageSpokenAtHome}
-                />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 md:space-y-8">
+          {/* 步骤 1: 个人基本信息 */}
+          {currentFormStep === 1 && (
+            <div className="space-y-6 md:space-y-8">
+              {/* Agent选择 - 仅在showAgentSelect为true时显示 */}
+              {showAgentSelect && (
+                <div className="bg-blue-50 p-4 md:p-6 rounded-lg border-2 border-blue-200">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Agent Selection</h2>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Selected Agent {FORM_FIELDS.selectedAgent.required && <span className="text-red-500">*</span>}
+                    </label>
+                    <AgentSelector
+                      value={selectedAgent || ''}
+                      onChange={(value) => {
+                        const formValues = getValues();
+                        formValues.selectedAgent = value;
+                        // populate details if agent is known or clear if empty
+                        const agent = value
+                          ? agentService.getAgentByValue((agentService.cache?.data?.items) || [], value)
+                          : null;
+                        formValues.agentName = agent?.contact || '';
+                        formValues.agentEmail = (agent?.emails && agent.emails[0]) || '';
+                        reset(formValues);
+                      }}
+                      onAgentSelected={(agent) => {
+                        const formValues = getValues();
+                        formValues.selectedAgent = `${agent.name}|${agent.country || ''}`;
+                        formValues.agentName = agent.contact || '';
+                        formValues.agentEmail = (agent.emails && agent.emails[0]) || '';
+                        reset(formValues);
+                      }}
+                      error={errors.selectedAgent?.message}
+                      placeholder="Search and select your assigned agent"
+                      required={FORM_FIELDS.selectedAgent.required}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Please search and select your assigned agent from the dynamically loaded list above
+                  </p>
+                </div>
               )}
-              <FormField
-                field={FORM_FIELDS.wasEnglishInstructionLanguage}
-                register={register}
-                error={errors.wasEnglishInstructionLanguage}
-              />
-              <FormField
-                field={FORM_FIELDS.hasCompletedEnglishTest}
-                register={register}
-                error={errors.hasCompletedEnglishTest}
-              />
-            </div>
-          </div>
 
-          {/* 5. English Test (conditional) */}
-          {hasCompletedEnglishTest === 'English test' && (
-            <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">English Test</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.englishTestType}
-                  register={register}
-                  error={errors.englishTestType}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please select test type' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.listeningScore}
-                  register={register}
-                  error={errors.listeningScore}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter listening score' : false,
-                    pattern: {
-                      value: /^\d*\.?\d*$/,
-                      message: 'Please enter a valid number'
-                    },
-                    min: {
-                      value: 0,
-                      message: 'Score must be 0 or greater'
-                    }
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.readingScore}
-                  register={register}
-                  error={errors.readingScore}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter reading score' : false,
-                    pattern: {
-                      value: /^\d*\.?\d*$/,
-                      message: 'Please enter a valid number'
-                    },
-                    min: {
-                      value: 0,
-                      message: 'Score must be 0 or greater'
-                    }
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.writingScore}
-                  register={register}
-                  error={errors.writingScore}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter writing score' : false,
-                    pattern: {
-                      value: /^\d*\.?\d*$/,
-                      message: 'Please enter a valid number'
-                    },
-                    min: {
-                      value: 0,
-                      message: 'Score must be 0 or greater'
-                    }
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.speakingScore}
-                  register={register}
-                  error={errors.speakingScore}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter speaking score' : false,
-                    pattern: {
-                      value: /^\d*\.?\d*$/,
-                      message: 'Please enter a valid number'
-                    },
-                    min: {
-                      value: 0,
-                      message: 'Score must be 0 or greater'
-                    }
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.overallScore}
-                  register={register}
-                  error={errors.overallScore}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please enter overall score' : false,
-                    pattern: {
-                      value: /^\d*\.?\d*$/,
-                      message: 'Please enter a valid number'
-                    },
-                    min: {
-                      value: 0,
-                      message: 'Score must be 0 or greater'
-                    }
-                  }}
-                />
-              </div>
+              {/* Personal Information */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Personal Information</h2>
 
-              {/* Test Date - Independent row */}
-              <div className="mt-8">
-                <FormField
-                  field={FORM_FIELDS.engTestDate}
-                  register={register}
-                  error={errors.engTestDate}
-                  customValidation={{
-                    required: hasCompletedEnglishTest === 'English test' ? 'Please select test date' : false,
-                    validate: {
-                      notFuture: (value) => {
-                        if (!value) return true;
-                        const selectedDate = new Date(value);
-                        const today = new Date();
-                        today.setHours(23, 59, 59, 999);
-                        return selectedDate <= today || 'Test date cannot be in the future';
-                      }
-                    }
-                  }}
-                />
+                {/* Basic Information Panel */}
+                <CollapsibleSection
+                  title="Basic Information"
+                  defaultOpen={true}
+                  description="Essential personal details and contact information"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.title}
+                      register={register}
+                      error={errors.title}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.firstName}
+                      register={register}
+                      error={errors.firstName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.middleName}
+                      register={register}
+                      error={errors.middleName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.familyName}
+                      register={register}
+                      error={errors.familyName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.preferredName}
+                      register={register}
+                      error={errors.preferredName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.gender}
+                      register={register}
+                      error={errors.gender}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.dateOfBirth}
+                      register={register}
+                      error={errors.dateOfBirth}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.email}
+                      register={register}
+                      error={errors.email}
+                    />
+                  </div>
+                </CollapsibleSection>
+
+                {/* Birth & Identity Details Panel */}
+                <CollapsibleSection
+                  title="Birth & Identity Details"
+                  defaultOpen={true}
+                  description="Place of birth and nationality information"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.birthplace}
+                      register={register}
+                      error={errors.birthplace}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.countryOfBirth}
+                      register={register}
+                      error={errors.countryOfBirth}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.nationality}
+                      register={register}
+                      error={errors.nationality}
+                    />
+                  </div>
+                </CollapsibleSection>
+
+                {/* Passport & Documentation Panel */}
+                <CollapsibleSection
+                  title="Passport & Documentation"
+                  defaultOpen={true}
+                  description="Travel documents and student identification"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.passportNumber}
+                      register={register}
+                      error={errors.passportNumber}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.passportExpiryDate}
+                      register={register}
+                      error={errors.passportExpiryDate}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.usi}
+                      register={register}
+                      error={errors.usi}
+                    />
+                  </div>
+                </CollapsibleSection>
               </div>
             </div>
           )}
 
-          {/* 6. Education History */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Education History</h2>
-            <div className="space-y-8">
-              <FormField
-                field={FORM_FIELDS.highestSchoolLevel}
-                register={register}
-                error={errors.highestSchoolLevel}
-              />
-              <FormField
-                field={FORM_FIELDS.isStillAttendingSchool}
-                register={register}
-                error={errors.isStillAttendingSchool}
-              />
-              <FormField
-                field={FORM_FIELDS.hasAchievedQualifications}
-                register={register}
-                error={errors.hasAchievedQualifications}
-              />
-            </div>
-          </div>
+          {/* 步骤 2: 地址和联系信息 */}
+          {currentFormStep === 2 && (
+            <div className="space-y-6 md:space-y-8">
+              {/* Current Address */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Current Address</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                  <FormField
+                    field={FORM_FIELDS.currentCountry}
+                    register={register}
+                    error={errors.currentCountry}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.buildingPropertyName}
+                    register={register}
+                    error={errors.buildingPropertyName}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.flatUnitDetails}
+                    register={register}
+                    error={errors.flatUnitDetails}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.streetNumber}
+                    register={register}
+                    error={errors.streetNumber}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.streetName}
+                    register={register}
+                    error={errors.streetName}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.cityTownSuburb}
+                    register={register}
+                    error={errors.cityTownSuburb}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.state}
+                    register={register}
+                    error={errors.state}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.postcode}
+                    register={register}
+                    error={errors.postcode}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.mobilePhone}
+                    register={register}
+                    error={errors.mobilePhone}
+                  />
+                </div>
+                <div className="mt-6">
+                  <FormField
+                    field={FORM_FIELDS.hasPostalAddress}
+                    register={register}
+                    error={errors.hasPostalAddress}
+                  />
+                </div>
+              </div>
 
-          {/* 7. The Highest Qualification Achieved (conditional) */}
-          {hasAchievedQualifications === 'Yes' && (
-            <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">The Highest Qualification Achieved</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={qualificationLevelField}
-                  register={register}
-                  error={errors.qualificationLevel}
-                  customValidation={{
-                    required: hasAchievedQualifications === 'Yes' ? 'Please select qualification level' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.qualificationName}
-                  register={register}
-                  error={errors.qualificationName}
-                  customValidation={{
-                    required: hasAchievedQualifications === 'Yes' ? 'Please enter qualification name' : false
-                  }}
-                />
-                <FormField
-                  field={qualificationRecognitionField}
-                  register={register}
-                  error={errors.qualificationRecognition}
-                  customValidation={{
-                    required: hasAchievedQualifications === 'Yes' ? 'Please select qualification recognition' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.institutionName}
-                  register={register}
-                  error={errors.institutionName}
-                  customValidation={{
-                    required: hasAchievedQualifications === 'Yes' ? 'Please enter institution name' : false
-                  }}
-                />
-                <FormField
-                  field={FORM_FIELDS.stateCountry}
-                  register={register}
-                  error={errors.stateCountry}
-                  customValidation={{
-                    required: hasAchievedQualifications === 'Yes' ? 'Please enter state/country' : false
-                  }}
-                />
+              {/* Postal Address (conditional) */}
+              {hasPostalAddress === 'Yes' && (
+                <div className="bg-blue-50 p-4 md:p-6 rounded-lg border-2 border-blue-200">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Postal Address</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.postalCountry}
+                      register={register}
+                      error={errors.postalCountry}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please select country' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalBuildingPropertyName}
+                      register={register}
+                      error={errors.postalBuildingPropertyName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalFlatUnitDetails}
+                      register={register}
+                      error={errors.postalFlatUnitDetails}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalStreetNumber}
+                      register={register}
+                      error={errors.postalStreetNumber}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter street number' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalStreetName}
+                      register={register}
+                      error={errors.postalStreetName}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter street name' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalCityTownSuburb}
+                      register={register}
+                      error={errors.postalCityTownSuburb}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter city/town/suburb' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalState}
+                      register={register}
+                      error={errors.postalState}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter state' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalPostcode}
+                      register={register}
+                      error={errors.postalPostcode}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter postcode' : false,
+                        pattern: {
+                          value: /^[0-9]+$/,
+                          message: 'Please enter a valid postcode'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.postalMobilePhone}
+                      register={register}
+                      error={errors.postalMobilePhone}
+                      customValidation={{
+                        required: hasPostalAddress === 'Yes' ? 'Please enter mobile phone number' : false,
+                        pattern: {
+                          value: /^[0-9]+$/,
+                          message: 'Please enter a valid mobile phone number (numbers only)'
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Emergency/Guardian Contact */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Emergency/Guardian Contact</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                  <FormField
+                    field={FORM_FIELDS.contactType}
+                    register={register}
+                    error={errors.contactType}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.relationship}
+                    register={register}
+                    error={errors.relationship}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactGivenName}
+                    register={register}
+                    error={errors.contactGivenName}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactFamilyName}
+                    register={register}
+                    error={errors.contactFamilyName}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactFlatUnitDetails}
+                    register={register}
+                    error={errors.contactFlatUnitDetails}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactStreetAddress}
+                    register={register}
+                    error={errors.contactStreetAddress}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactCityTownSuburb}
+                    register={register}
+                    error={errors.contactCityTownSuburb}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactPostcode}
+                    register={register}
+                    error={errors.contactPostcode}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactState}
+                    register={register}
+                    error={errors.contactState}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactCountry}
+                    register={register}
+                    error={errors.contactCountry}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactEmail}
+                    register={register}
+                    error={errors.contactEmail}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactMobile}
+                    register={register}
+                    error={errors.contactMobile}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.contactLanguagesSpoken}
+                    register={register}
+                    error={errors.contactLanguagesSpoken}
+                  />
+                </div>
               </div>
             </div>
           )}
 
-          {/* 8. Employment */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Employment</h2>
-            <div className="space-y-8">
-              <FormField
-                field={currentEmploymentStatusField}
-                register={register}
-                error={errors.currentEmploymentStatus}
-              />
-              <FormField
-                field={industryOfEmploymentField}
-                register={register}
-                error={errors.industryOfEmployment}
-              />
-              <FormField
-                field={occupationIdentifierField}
-                register={register}
-                error={errors.occupationIdentifier}
-              />
-            </div>
-          </div>
-
-          {/* 9. How did you hear about us? */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">How did you hear about us?</h2>
-            <div className="space-y-8">
-              <FormField
-                field={FORM_FIELDS.howDidYouHearAboutUs}
-                register={register}
-                error={errors.howDidYouHearAboutUs}
-              />
-              <FormField
-                field={FORM_FIELDS.howDidYouHearDetails}
-                register={register}
-                error={errors.howDidYouHearDetails}
-              />
-            </div>
-          </div>
-
-          {/* 10. Agent Details (conditional) */}
-          {howDidYouHearAboutUs === 'Agent' && (
-            <div className="bg-blue-50 p-8 rounded-lg border-2 border-blue-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">Agent Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <FormField
-                  field={FORM_FIELDS.agentName}
-                  register={register}
-                  error={errors.agentName}
-                />
-                <FormField
-                  field={FORM_FIELDS.agentEmail}
-                  register={register}
-                  error={errors.agentEmail}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 11. Emergency/Guardian Contact */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Emergency/Guardian Contact</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <FormField
-                field={FORM_FIELDS.contactType}
-                register={register}
-                error={errors.contactType}
-              />
-              <FormField
-                field={FORM_FIELDS.relationship}
-                register={register}
-                error={errors.relationship}
-              />
-              <FormField
-                field={FORM_FIELDS.contactGivenName}
-                register={register}
-                error={errors.contactGivenName}
-              />
-              <FormField
-                field={FORM_FIELDS.contactFamilyName}
-                register={register}
-                error={errors.contactFamilyName}
-              />
-              <FormField
-                field={FORM_FIELDS.contactFlatUnitDetails}
-                register={register}
-                error={errors.contactFlatUnitDetails}
-              />
-              <FormField
-                field={FORM_FIELDS.contactStreetAddress}
-                register={register}
-                error={errors.contactStreetAddress}
-              />
-              <FormField
-                field={FORM_FIELDS.contactCityTownSuburb}
-                register={register}
-                error={errors.contactCityTownSuburb}
-              />
-              <FormField
-                field={FORM_FIELDS.contactPostcode}
-                register={register}
-                error={errors.contactPostcode}
-              />
-              <FormField
-                field={FORM_FIELDS.contactState}
-                register={register}
-                error={errors.contactState}
-              />
-              <FormField
-                field={FORM_FIELDS.contactCountry}
-                register={register}
-                error={errors.contactCountry}
-              />
-              <FormField
-                field={FORM_FIELDS.contactEmail}
-                register={register}
-                error={errors.contactEmail}
-              />
-              <FormField
-                field={FORM_FIELDS.contactMobile}
-                register={register}
-                error={errors.contactMobile}
-              />
-              <FormField
-                field={FORM_FIELDS.contactLanguagesSpoken}
-                register={register}
-                error={errors.contactLanguagesSpoken}
-              />
-            </div>
-          </div>
-
-          {/* 12. Course Intake Selection */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Course Intake Selection</h2>
-
-            {/* Display error message if any */}
-            {intakeError && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-yellow-800 text-sm">
-                  <strong>Notice:</strong> {intakeError}
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <FormField
-                field={selectedIntakeField}
-                register={register}
-                error={errors.selectedIntake}
-              />
-
-              {/* Information note */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Please select your preferred course intake date. This will be your intended start date for the Certificate V in Construction Management course.
-                  {isLoadingIntakes && (
-                    <span className="ml-2 text-blue-600">Loading available dates...</span>
+          {/* 步骤 3: 教育和语言背景 */}
+          {currentFormStep === 3 && (
+            <div className="space-y-6 md:space-y-8">
+              {/* Language and Cultural Diversity */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Language and Cultural Diversity</h2>
+                <div className="space-y-6 md:space-y-8">
+                  <FormField
+                    field={FORM_FIELDS.isAboriginal}
+                    register={register}
+                    error={errors.isAboriginal}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.isTorresStraitIslander}
+                    register={register}
+                    error={errors.isTorresStraitIslander}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.isEnglishMainLanguage}
+                    register={register}
+                    error={errors.isEnglishMainLanguage}
+                  />
+                  {isEnglishMainLanguage === 'No' && (
+                    <FormField
+                      field={FORM_FIELDS.languageSpokenAtHome}
+                      register={register}
+                      error={errors.languageSpokenAtHome}
+                    />
                   )}
-                </p>
+                  <FormField
+                    field={FORM_FIELDS.wasEnglishInstructionLanguage}
+                    register={register}
+                    error={errors.wasEnglishInstructionLanguage}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.hasCompletedEnglishTest}
+                    register={register}
+                    error={errors.hasCompletedEnglishTest}
+                  />
+                </div>
               </div>
 
-              {/* Show retry button if there was an error */}
-              {intakeError && !isLoadingIntakes && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Trigger reload of intake data
-                    window.location.reload();
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  Retry Loading Intake Dates
-                </button>
+              {/* English Test (conditional) */}
+              {hasCompletedEnglishTest === 'English test' && (
+                <div className="bg-blue-50 p-4 md:p-6 rounded-lg border-2 border-blue-200">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">English Test</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.englishTestType}
+                      register={register}
+                      error={errors.englishTestType}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please select test type' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.listeningScore}
+                      register={register}
+                      error={errors.listeningScore}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please enter listening score' : false,
+                        pattern: {
+                          value: /^\d*\.?\d*$/,
+                          message: 'Please enter a valid number'
+                        },
+                        min: {
+                          value: 0,
+                          message: 'Score must be 0 or greater'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.readingScore}
+                      register={register}
+                      error={errors.readingScore}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please enter reading score' : false,
+                        pattern: {
+                          value: /^\d*\.?\d*$/,
+                          message: 'Please enter a valid number'
+                        },
+                        min: {
+                          value: 0,
+                          message: 'Score must be 0 or greater'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.writingScore}
+                      register={register}
+                      error={errors.writingScore}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please enter writing score' : false,
+                        pattern: {
+                          value: /^\d*\.?\d*$/,
+                          message: 'Please enter a valid number'
+                        },
+                        min: {
+                          value: 0,
+                          message: 'Score must be 0 or greater'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.speakingScore}
+                      register={register}
+                      error={errors.speakingScore}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please enter speaking score' : false,
+                        pattern: {
+                          value: /^\d*\.?\d*$/,
+                          message: 'Please enter a valid number'
+                        },
+                        min: {
+                          value: 0,
+                          message: 'Score must be 0 or greater'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overallScore}
+                      register={register}
+                      error={errors.overallScore}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please enter overall score' : false,
+                        pattern: {
+                          value: /^\d*\.?\d*$/,
+                          message: 'Please enter a valid number'
+                        },
+                        min: {
+                          value: 0,
+                          message: 'Score must be 0 or greater'
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Test Date - Independent row */}
+                  <div className="mt-6 md:mt-8">
+                    <FormField
+                      field={FORM_FIELDS.engTestDate}
+                      register={register}
+                      error={errors.engTestDate}
+                      customValidation={{
+                        required: hasCompletedEnglishTest === 'English test' ? 'Please select test date' : false,
+                        validate: {
+                          notFuture: (value) => {
+                            if (!value) return true;
+                            const selectedDate = new Date(value);
+                            const today = new Date();
+                            today.setHours(23, 59, 59, 999);
+                            return selectedDate <= today || 'Test date cannot be in the future';
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
               )}
+
+              {/* Education History */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Education History</h2>
+                <div className="space-y-6 md:space-y-8">
+                  <FormField
+                    field={FORM_FIELDS.highestSchoolLevel}
+                    register={register}
+                    error={errors.highestSchoolLevel}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.isStillAttendingSchool}
+                    register={register}
+                    error={errors.isStillAttendingSchool}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.hasAchievedQualifications}
+                    register={register}
+                    error={errors.hasAchievedQualifications}
+                  />
+                </div>
+              </div>
+
+              {/* The Highest Qualification Achieved (conditional) */}
+              {hasAchievedQualifications === 'Yes' && (
+                <div className="bg-blue-50 p-4 md:p-6 rounded-lg border-2 border-blue-200">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">The Highest Qualification Achieved</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={qualificationLevelField}
+                      register={register}
+                      error={errors.qualificationLevel}
+                      customValidation={{
+                        required: hasAchievedQualifications === 'Yes' ? 'Please select qualification level' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.qualificationName}
+                      register={register}
+                      error={errors.qualificationName}
+                      customValidation={{
+                        required: hasAchievedQualifications === 'Yes' ? 'Please enter qualification name' : false
+                      }}
+                    />
+                    <FormField
+                      field={qualificationRecognitionField}
+                      register={register}
+                      error={errors.qualificationRecognition}
+                      customValidation={{
+                        required: hasAchievedQualifications === 'Yes' ? 'Please select qualification recognition' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.institutionName}
+                      register={register}
+                      error={errors.institutionName}
+                      customValidation={{
+                        required: hasAchievedQualifications === 'Yes' ? 'Please enter institution name' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.stateCountry}
+                      register={register}
+                      error={errors.stateCountry}
+                      customValidation={{
+                        required: hasAchievedQualifications === 'Yes' ? 'Please enter state/country' : false
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Employment */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Employment</h2>
+                <div className="space-y-6 md:space-y-8">
+                  <FormField
+                    field={currentEmploymentStatusField}
+                    register={register}
+                    error={errors.currentEmploymentStatus}
+                  />
+                  <FormField
+                    field={industryOfEmploymentField}
+                    register={register}
+                    error={errors.industryOfEmployment}
+                  />
+                  <FormField
+                    field={occupationIdentifierField}
+                    register={register}
+                    error={errors.occupationIdentifier}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 13. Terms and Conditions */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Terms and Conditions</h2>
-            <div className="mb-4">
-              <FormField
-                field={FORM_FIELDS.agreeToTerms}
-                register={register}
-                error={errors.agreeToTerms}
-              />
-            </div>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                Download and read the terms and conditions: <a href="https://bit.ly/onlineapptc" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">https://bit.ly/onlineapptc</a>
-              </p>
-            </div>
-          </div>
+          {/* 步骤 4: 课程和文档 */}
+          {currentFormStep === 4 && (
+            <div className="space-y-6 md:space-y-8">
+              {/* How did you hear about us? */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">How did you hear about us?</h2>
+                <div className="space-y-6 md:space-y-8">
+                  <FormField
+                    field={FORM_FIELDS.howDidYouHearAboutUs}
+                    register={register}
+                    error={errors.howDidYouHearAboutUs}
+                  />
+                  <FormField
+                    field={FORM_FIELDS.howDidYouHearDetails}
+                    register={register}
+                    error={errors.howDidYouHearDetails}
+                  />
+                </div>
+              </div>
 
-          {/* File Upload */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">File Upload</h2>
-            <FileUpload
-              requiredFiles={requiredFiles}
-              setRequiredFiles={setRequiredFiles}
-              optionalFiles={optionalFiles}
-              setOptionalFiles={setOptionalFiles}
-              englishProficiencyMethod={hasCompletedEnglishTest}
-            />
-          </div>
+              {/* Agent Details (conditional) */}
+              {howDidYouHearAboutUs === 'Agent' && (
+                <div className="bg-blue-50 p-4 md:p-6 rounded-lg border-2 border-blue-200">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Agent Details</h2>
+                  {/* Agent selector */}
+                  <div className="space-y-2 mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Select Agent <span className="text-red-500">*</span>
+                    </label>
+                    <AgentSelector
+                      value={selectedAgent || ''}
+                      onChange={(value) => {
+                        const formValues = getValues();
+                        formValues.selectedAgent = value;
+                        const agent = value
+                          ? agentService.getAgentByValue((agentService.cache?.data?.items) || [], value)
+                          : null;
+                        formValues.agentName = agent?.contact || '';
+                        formValues.agentEmail = (agent?.emails && agent.emails[0]) || '';
+                        reset(formValues);
+                      }}
+                      onAgentSelected={(agent) => {
+                        const formValues = getValues();
+                        formValues.selectedAgent = `${agent.name}|${agent.country}`;
+                        formValues.agentName = agent.contact || '';
+                        formValues.agentEmail = (agent.emails && agent.emails[0]) || '';
+                        reset(formValues);
+                      }}
+                      error={errors.selectedAgent?.message}
+                      placeholder="Search and select your agent"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.agentName}
+                      register={register}
+                      error={errors.agentName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.agentEmail}
+                      register={register}
+                      error={errors.agentEmail}
+                    />
+                  </div>
+                </div>
+              )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-col space-y-4">
-            {/* Test buttons - hidden in production */}
-            {!isProduction && (
-              <>
-                {/* Preview JSON Button */}
-                <button
-                  type="button"
-                  onClick={handleSubmit(handlePreviewJSON)}
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                  disabled={isSubmitting}
-                >
-                  Preview JSON Structure
-                </button>
+              {/* Course Intake Selection */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Course Intake Selection</h2>
 
-                {/* Test Validation Button */}
-                <button
-                  type="button"
-                  onClick={handleSubmit(handleTestValidation)}
-                  className="w-full bg-yellow-600 text-white py-3 px-6 rounded-lg hover:bg-yellow-700 transition-colors font-medium"
-                  disabled={isSubmitting || isTestValidating}
-                >
-                  {isTestValidating ? 'Testing Validation...' : 'Test Validation'}
-                </button>
-
-                {/* API Tester Button */}
-                {/* <button
-                  type="button"
-                  onClick={() => setShowApiTester(true)}
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  🔧 通用 API 测试工具
-                </button> */}
-
-                {/* Power Automate Validator Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowPowerAutomateValidator(true)}
-                  className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                  🧪 Test Power Automate JSON Validation
-                </button>
-
-                {/* View Last Validation Errors Button */}
-                {validationErrors.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowValidationErrors(true)}
-                    className="w-full bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700 transition-colors font-medium"
-                  >
-                    🚨 View Last Validation Errors ({validationErrors.length})
-                  </button>
+                {/* Display error message if any */}
+                {intakeError && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-yellow-800 text-sm">
+                      <strong>Notice:</strong> {intakeError}
+                    </p>
+                  </div>
                 )}
 
-                {/* File Test Button */}
-                <button
-                  type="button"
-                  onClick={handleFileTest}
-                  className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                  disabled={isSubmitting || isFileTestLoading}
-                >
-                  {isFileTestLoading ? '📤 Testing File Submission...' : '📎 Test File Submission to Email'}
-                </button>
-              </>
-            )}
+                <div className="space-y-4">
+                  <FormField
+                    field={selectedIntakeField}
+                    register={register}
+                    error={errors.selectedIntake}
+                  />
 
-            {/* Submit Button - always visible */}
-            <SubmitButton
-              isSubmitting={isSubmitting}
-              submitStatus={submitStatus}
-              isPowerAutomateMode={isPowerAutomateMode}
-            />
-          </div>
+                  {/* Information note */}
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> Please select your preferred course intake date. This will be your intended start date for the Certificate V in Construction Management course.
+                      {isLoadingIntakes && (
+                        <span className="ml-2 text-blue-600">Loading available dates...</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Show retry button if there was an error */}
+                  {intakeError && !isLoadingIntakes && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Trigger reload of intake data
+                        window.location.reload();
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    >
+                      Retry Loading Intake Dates
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Terms and Conditions */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Terms and Conditions</h2>
+                <div className="mb-4">
+                  <FormField
+                    field={FORM_FIELDS.agreeToTerms}
+                    register={register}
+                    error={errors.agreeToTerms}
+                  />
+                </div>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    Download and read the terms and conditions: <a href="https://bit.ly/onlineapptc" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">https://bit.ly/onlineapptc</a>
+                  </p>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div className="bg-gray-50 p-4 md:p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">File Upload</h2>
+                <FileUpload
+                  requiredFiles={requiredFiles}
+                  setRequiredFiles={setRequiredFiles}
+                  optionalFiles={optionalFiles}
+                  setOptionalFiles={setOptionalFiles}
+                  englishProficiencyMethod={hasCompletedEnglishTest}
+                  validationErrors={fileValidationErrors}
+                />
+              </div>
+
+              {/* Test buttons - hidden in production */}
+              {!isProduction && (
+                <div className="bg-yellow-50 p-4 md:p-6 rounded-lg border border-yellow-200">
+                  <h3 className="text-lg font-semibold text-yellow-800 mb-4">Development Tools</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Preview JSON Button */}
+                    <button
+                      type="button"
+                      onClick={handleSubmit(handlePreviewJSON)}
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                      disabled={isSubmitting}
+                    >
+                      Preview JSON
+                    </button>
+
+                    {/* Test Validation Button */}
+                    <button
+                      type="button"
+                      onClick={handleSubmit(handleTestValidation)}
+                      className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors font-medium text-sm"
+                      disabled={isSubmitting || isTestValidating}
+                    >
+                      {isTestValidating ? 'Testing...' : 'Test Validation'}
+                    </button>
+
+                    {/* Power Automate Validator Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPowerAutomateValidator(true)}
+                      className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm"
+                    >
+                      Test Power Automate
+                    </button>
+
+                    {/* File Test Button */}
+                    <button
+                      type="button"
+                      onClick={handleFileTest}
+                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+                      disabled={isSubmitting || isFileTestLoading}
+                    >
+                      {isFileTestLoading ? 'Testing...' : 'Test Files'}
+                    </button>
+
+                    {/* View Last Validation Errors Button */}
+                    {validationErrors.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowValidationErrors(true)}
+                        className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium text-sm col-span-full"
+                      >
+                        View Validation Errors ({validationErrors.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 步骤导航 */}
+          <StepNavigation
+            currentStep={currentFormStep}
+            totalSteps={4}
+            onPrevious={goToPreviousStep}
+            onNext={goToNextStep}
+            onSubmit={handleReviewSubmit}
+            isSubmitting={isSubmitting}
+            isValidating={isStepValidating}
+            canProceed={!isStepValidating}
+            submitButtonText="Submit Application"
+          />
         </form>
-
 
         {/* CRICOS Validation Errors Modal */}
         {showValidationErrors && (
@@ -1520,7 +2077,6 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           </div>
         )}
 
-
         {/* JSON Preview Modal */}
         {showJsonPreview && previewData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1597,14 +2153,25 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         <SubmissionProgressModal
           isOpen={isProgressModalOpen}
           onClose={resetProgressModal}
-          currentStep={currentStep}
+          currentStep={submissionStep}
           stepStatuses={stepStatuses}
           errors={progressErrors}
           isComplete={isSubmissionComplete}
+        />
+
+        {/* Review Modal */}
+        <ReviewModal
+          isOpen={showReviewModal}
+          onClose={handleEditFromReview}
+          formData={getValues()}
+          requiredFiles={requiredFiles}
+          optionalFiles={optionalFiles}
+          onConfirmSubmit={handleConfirmSubmit}
+          onEdit={handleEditFromReview}
         />
       </div>
     </div>
   );
 };
 
-export default PersonalInfoForm; 
+export default PersonalInfoForm;

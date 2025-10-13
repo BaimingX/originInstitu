@@ -258,8 +258,11 @@ export const validationRules = {
   },
 
   // English Test (conditional)
-  englishTestType: {},
+  englishTestType: {
+    required: 'Please select English test type'
+  },
   listeningScore: {
+    required: 'Please enter listening score',
     pattern: {
       value: /^\d*\.?\d*$/,
       message: 'Please enter a valid number'
@@ -270,6 +273,7 @@ export const validationRules = {
     }
   },
   readingScore: {
+    required: 'Please enter reading score',
     pattern: {
       value: /^\d*\.?\d*$/,
       message: 'Please enter a valid number'
@@ -280,6 +284,7 @@ export const validationRules = {
     }
   },
   writingScore: {
+    required: 'Please enter writing score',
     pattern: {
       value: /^\d*\.?\d*$/,
       message: 'Please enter a valid number'
@@ -290,6 +295,7 @@ export const validationRules = {
     }
   },
   speakingScore: {
+    required: 'Please enter speaking score',
     pattern: {
       value: /^\d*\.?\d*$/,
       message: 'Please enter a valid number'
@@ -300,6 +306,7 @@ export const validationRules = {
     }
   },
   overallScore: {
+    required: 'Please enter overall score',
     pattern: {
       value: /^\d*\.?\d*$/,
       message: 'Please enter a valid number'
@@ -310,9 +317,10 @@ export const validationRules = {
     }
   },
   engTestDate: {
+    required: 'Please select test date',
     validate: {
       notFuture: (value) => {
-        if (!value) return true; // Optional field
+        if (!value) return true; // Let required validation handle empty values
         const selectedDate = new Date(value);
         const today = new Date();
         today.setHours(23, 59, 59, 999); // Set to end of today
@@ -331,14 +339,20 @@ export const validationRules = {
   },
 
   // Qualification Details (conditional)
-  qualificationLevel: {},
+  qualificationLevel: {
+    required: 'Please select your qualification level'
+  },
   qualificationName: {
+    required: 'Please enter your qualification name',
     validate: {
       englishOnly: validateEnglishAndNumbersOnly
     }
   },
-  qualificationRecognition: {},
+  qualificationRecognition: {
+    required: 'Please select your qualification recognition'
+  },
   institutionName: {
+    required: 'Please enter your institution name',
     validate: {
       englishOnly: validateEnglishAndNumbersOnly
     }
@@ -462,9 +476,17 @@ export const validationRules = {
     required: 'Please agree to the terms and conditions'
   },
 
-  // Legacy fields for backward compatibility
+  // Agent Selection
   selectedAgent: {
-    required: 'Please select an agent'
+    required: 'Please select an agent',
+    validate: {
+      validFormat: (value) => {
+        if (!value) return true; // Required validation handles empty values
+        // Check if value follows the expected "name|country" format
+        const parts = value.split('|');
+        return parts.length === 2 && parts[0].trim() && parts[1].trim() || 'Invalid agent selection format';
+      }
+    }
   }
 };
 
@@ -1854,7 +1876,7 @@ export const FORM_FIELDS = {
   // English Test Section (conditional)
   englishTestType: {
     name: 'englishTestType',
-    label: 'If Yes, what test did you sit?',
+    label: 'What test did you sit?',
     type: 'select',
     required: false,
     placeholder: 'Please select test type',
@@ -2222,20 +2244,14 @@ export const FORM_FIELDS = {
     required: true
   },
 
-  // Legacy fields for backward compatibility
+  // Agent Selection Field - Dynamic loading via AgentSelector component
   selectedAgent: {
     name: 'selectedAgent',
     label: 'Selected Agent',
-    type: 'select',
+    type: 'custom', // Uses AgentSelector component instead of standard select
     required: true,
-    placeholder: 'Please select an agent',
-    options: [
-      { value: 'agent001', label: '001' },
-      { value: 'agent002', label: '002' },
-      { value: 'agent003', label: '003' },
-      { value: 'agent004', label: '004' },
-      { value: 'agent005', label: '005' }
-    ]
+    placeholder: 'Search and select your assigned agent',
+    description: 'Select your assigned agent from the dynamically loaded list'
   }
 };
 

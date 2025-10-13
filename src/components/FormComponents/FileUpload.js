@@ -8,7 +8,8 @@ const FileUpload = ({
   setRequiredFiles,
   optionalFiles,
   setOptionalFiles,
-  englishProficiencyMethod
+  englishProficiencyMethod,
+  validationErrors = []
 }) => {
 
   const handleFileUpload = (fileKey, isRequired = true) => (event) => {
@@ -51,7 +52,7 @@ const FileUpload = ({
     }
   };
 
-  const FileUploadSlot = ({ fileKey, label, file, onUpload, onRemove }) => (
+  const FileUploadSlot = ({ fileKey, label, file, onUpload, onRemove, hasError }) => (
     <div className="flex flex-col items-center space-y-2">
       <div className="relative">
         <input
@@ -64,12 +65,14 @@ const FileUpload = ({
         <div className={`w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${
           file
             ? 'border-green-400 bg-green-50'
+            : hasError
+            ? 'border-red-400 bg-red-50'
             : 'border-gray-300 hover:border-primary-blue hover:bg-blue-50'
         }`}>
           {file ? (
             <File size={32} className="text-green-600" />
           ) : (
-            <Plus size={32} className="text-gray-400" />
+            <Plus size={32} className={hasError ? "text-red-400" : "text-gray-400"} />
           )}
         </div>
         {file && (
@@ -84,11 +87,16 @@ const FileUpload = ({
         )}
       </div>
       <div className="text-center">
-        <p className="text-xs font-medium text-gray-700 mb-1">{label}</p>
-        {file && (
+        <p className={`text-xs font-medium mb-1 ${hasError ? 'text-red-700' : 'text-gray-700'}`}>
+          {label}
+          {hasError && <span className="text-red-500 ml-1">*</span>}
+        </p>
+        {file ? (
           <p className="text-xs text-green-600 truncate max-w-20" title={file.name}>
             {file.name}
           </p>
+        ) : hasError && (
+          <p className="text-xs text-red-600">Required</p>
         )}
       </div>
     </div>
@@ -104,6 +112,16 @@ const FileUpload = ({
     { key: 'englishTest', label: getEnglishTestLabel() },
     { key: 'academicQualifications', label: 'Academic Qualifications & Transcripts' }
   ];
+
+  // Check which files have errors
+  const getMissingFileKeys = () => {
+    return requiredFileConfigs
+      .filter(config => !requiredFiles[config.key])
+      .map(config => config.key);
+  };
+
+  const missingFileKeys = getMissingFileKeys();
+  const hasAnyMissingFiles = missingFileKeys.length > 0 && validationErrors.length > 0;
 
   const optionalFileConfigs = [
     { key: 'cv', label: 'CV' },
@@ -130,6 +148,7 @@ const FileUpload = ({
               file={requiredFiles[config.key]}
               onUpload={handleFileUpload(config.key, true)}
               onRemove={handleFileRemove(config.key, true)}
+              hasError={hasAnyMissingFiles && !requiredFiles[config.key]}
             />
           ))}
         </div>

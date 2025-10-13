@@ -100,7 +100,7 @@ const AgentPage = ({ onNavigate, onBackToHome }) => {
           {/* 底部信息 */}
           <div className="text-center mt-20">
             <p className="text-lg text-gray-500 mb-4">
-              Long Course Student Application System - Agent Portal
+              Origin Institute Online Application Form - Agent Portal
             </p>
             <p className="text-sm text-gray-400">
               © 2024 Origin Institute. All rights reserved.
