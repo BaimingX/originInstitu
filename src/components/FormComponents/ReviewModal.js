@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, FileText, Edit3, CheckCircle } from 'lucide-react';
-import agentService from '../../services/agentService';
 
 const ReviewModal = ({
   isOpen,

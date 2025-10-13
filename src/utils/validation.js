@@ -484,7 +484,7 @@ export const validationRules = {
         if (!value) return true; // Required validation handles empty values
         // Check if value follows the expected "name|country" format
         const parts = value.split('|');
-        return parts.length === 2 && parts[0].trim() && parts[1].trim() || 'Invalid agent selection format';
+        return (parts.length === 2 && parts[0].trim() && parts[1].trim()) || 'Invalid agent selection format';
       }
     }
   }

@@ -418,7 +418,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       formValues.agentEmail = '';
       reset(formValues);
     }
-  }, [howDidYouHearAboutUs]);
+  }, [howDidYouHearAboutUs, getValues, reset]);
 
   // 定期保存进度
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import logoImage from '../image/Origin_logo.jpg';
 
 const HomePage = ({ onNavigate }) => {
@@ -10,7 +10,7 @@ const HomePage = ({ onNavigate }) => {
   const lastWheelTime = useRef(0);
 
   // 平滑滚动到指定部分
-  const scrollToSection = (sectionIndex) => {
+  const scrollToSection = useCallback((sectionIndex) => {
     if (isScrolling) return;
 
     setIsScrolling(true);
@@ -24,7 +24,7 @@ const HomePage = ({ onNavigate }) => {
     setTimeout(() => {
       setIsScrolling(false);
     }, 800);
-  };
+  }, [isScrolling]);
 
   // 处理鼠标滚轮事件
   useEffect(() => {
@@ -50,7 +50,7 @@ const HomePage = ({ onNavigate }) => {
 
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
-  }, [currentSection, isScrolling]);
+  }, [currentSection, isScrolling, scrollToSection]);
 
   // 处理触摸事件（移动端）
   useEffect(() => {
@@ -84,7 +84,7 @@ const HomePage = ({ onNavigate }) => {
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [currentSection, isScrolling]);
+  }, [currentSection, isScrolling, scrollToSection]);
 
   useEffect(() => {
     const handleScroll = () => {
