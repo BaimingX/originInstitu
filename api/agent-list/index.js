@@ -166,7 +166,10 @@ module.exports = async function (context, req) {
           parseMethod: 'regex (no dependencies)',
           extractedCount: agents.length,
           dedupedCount: deduped.length,
-          usingFallback: deduped.length === 0
+          usingFallback: deduped.length === 0,
+          htmlLength: html.length,
+          containsAgentListwrap: html.includes('agent-listwrap'),
+          simplePatternMatches: html.match(/<div[^>]*class="agent-listwrap"/g)?.length || 0
         }
       })
     };
