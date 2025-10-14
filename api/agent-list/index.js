@@ -31,163 +31,35 @@ function extractHref(html, pattern) {
 
 module.exports = async function (context, req) {
   try {
-    context.log('=== Agent list function started (NO DEPENDENCIES VERSION) ===');
+    context.log('=== ULTRA SIMPLE TEST VERSION ===');
 
-    // Load HTML
-    let html = null;
-    if (process.env.LOCAL_EXAMPLE_HTML === 'true') {
-      try {
-        const localPath = path.resolve(__dirname, '../../example.html');
-        html = await fs.readFile(localPath, 'utf8');
-        context.log('Using local example.html');
-      } catch (e) {
-        context.log('Failed reading local example.html, falling back to upstream');
+    // Skip all complex processing, just return default agents
+    const responseBody = {
+      status: 'ultra_simple_test',
+      message: 'Testing basic function execution without complex logic',
+      timestamp: new Date().toISOString(),
+      total: DEFAULT_AGENTS.length,
+      items: DEFAULT_AGENTS,
+      diagnostics: {
+        testMode: true,
+        nodeVersion: process.version,
+        environment: {
+          LOCAL_EXAMPLE_HTML: process.env.LOCAL_EXAMPLE_HTML,
+          NODE_ENV: process.env.NODE_ENV
+        }
       }
-    }
-
-    if (!html) {
-      const refresh = req.query?.refresh === 'true';
-      const url = refresh ? `${UPSTREAM}?_cb=${Date.now()}` : UPSTREAM;
-
-      context.log('Fetching from upstream:', url);
-
-      // Add timeout to prevent Azure Functions from being terminated
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        context.log('Fetch timeout, aborting request...');
-        controller.abort();
-      }, 25000); // 25 second timeout (Azure Functions has 30s default)
-
-      const r = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-      }
-
-      html = await r.text();
-      context.log('HTML fetched successfully, length:', html.length);
-    } catch (fetchError) {
-      if (fetchError.name === 'AbortError') {
-        context.log.error('Fetch request timed out after 25 seconds');
-        throw new Error('Request timeout - upstream server too slow');
-      } else {
-        context.log.error('Fetch failed:', {
-          name: fetchError.name,
-          message: fetchError.message,
-          code: fetchError.code
-        });
-        throw fetchError;
-      }
-    }
-
-    // Parse with regex instead of cheerio
-    const agents = [];
-
-    // Find all agent wrapper divs using regex - match complete content until </td> or next <td>
-    const agentWrapperRegex = /<div[^>]*class="agent-listwrap"[^>]*>([\s\S]*?)<\/div>(?=\s*<\/td>|\s*<td>|\s*<\/tr>|$)/gi;
-    let match;
-
-    context.log('Parsing HTML for agent data...');
-
-    while ((match = agentWrapperRegex.exec(html)) !== null) {
-      const agentHtml = match[1];
-
-      // Extract agent name (wrapped in <b> tags)
-      const nameMatch = agentHtml.match(/<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*><b>(.*?)<\/b><\/span>/i);
-      const name = nameMatch ? nameMatch[1].trim() : '';
-
-      if (!name) continue; // Skip if no name found
-
-      // Extract other fields using regex
-      const contact = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblContactPerson[^"]*"[^>]*>(.*?)<\/span>/i);
-      const addr1 = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblAddress[^"]*"[^>]*>(.*?)<\/span>/i);
-      const stateLine = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblState[^"]*"[^>]*>(.*?)<\/span>/i);
-      const country = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblCountry[^"]*"[^>]*>(.*?)<\/span>/i);
-      const phone = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblPhone[^"]*"[^>]*>(.*?)<\/span>/i);
-
-      // Extract email text and href
-      const emailMatch = agentHtml.match(/<a[^>]*id="[^"]*lblEmail[^"]*"[^>]*href="mailto:([^"]*)"[^>]*>(.*?)<\/a>/i);
-      const emailText = emailMatch ? emailMatch[2].trim() : '';
-
-      // Extract web href and text
-      const webMatch = agentHtml.match(/<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/i);
-      const webHref = webMatch ? webMatch[1] : '';
-      const webText = webMatch ? webMatch[2].trim() : '';
-
-      const emails = emailText ? [emailText.toLowerCase()] : [];
-      const phones = phone ? [phone.replace(/\s+/g, ' ').trim()] : [];
-      const websitesSet = new Set();
-
-      const pushUrl = (u) => {
-        if (!u) return;
-        const v = u.startsWith('http') ? u : `https://${u}`;
-        if (/^https?:\/\//i.test(v)) websitesSet.add(v);
-      };
-
-      pushUrl(webHref);
-      if (webText && webText !== webHref) pushUrl(webText);
-
-      agents.push({
-        name,
-        contact,
-        country,
-        address: [addr1, stateLine].filter(Boolean).join(', '),
-        emails,
-        phones,
-        websites: [...websitesSet]
-      });
-    }
-
-    // Dedup + sort
-    const deduped = [];
-    const seen = new Set();
-    for (const a of agents) {
-      const key = (a.name + '|' + (a.country || '')).toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        deduped.push(a);
-      }
-    }
-    deduped.sort((a, b) => a.name.localeCompare(b.name));
-
-    const finalAgents = deduped.length ? deduped : DEFAULT_AGENTS;
-
-    context.log(`Extracted ${agents.length} agents, deduped to ${deduped.length}, final count: ${finalAgents.length}`);
-
-    // Respond
-    const cacheControl = 'public, max-age=300, s-maxage=3600';
+    };
 
     context.res = {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': cacheControl,
+        'Cache-Control': 'no-cache',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({
-        source: process.env.LOCAL_EXAMPLE_HTML === 'true' ? 'local' : UPSTREAM,
-        updatedAt: new Date().toISOString(),
-        total: finalAgents.length,
-        items: finalAgents,
-        diagnostics: {
-          parseMethod: 'regex (no dependencies)',
-          extractedCount: agents.length,
-          dedupedCount: deduped.length,
-          usingFallback: deduped.length === 0,
-          htmlLength: html.length,
-          containsAgentListwrap: html.includes('agent-listwrap'),
-          simplePatternMatches: html.match(/<div[^>]*class="agent-listwrap"/g)?.length || 0
-        }
-      })
+      body: JSON.stringify(responseBody)
     };
 
-    context.log('=== Function completed successfully (NO DEPENDENCIES) ===');
+    context.log('=== ULTRA SIMPLE TEST COMPLETED ===');
   } catch (err) {
     const errorDetails = {
       name: err.name || 'Unknown',
@@ -219,12 +91,9 @@ module.exports = async function (context, req) {
           name: err.name || 'UnknownError',
           message: err.message || 'Function failed',
           code: err.code,
-          details: err.name === 'AbortError'
-            ? 'Request timeout - upstream server response too slow'
-            : `Function error: ${err.message}`,
+          details: `Ultra simple test - function error: ${err.message}`,
           timestamp: errorDetails.timestamp,
-          parseMethod: 'regex (no dependencies)',
-          isTimeout: err.name === 'AbortError'
+          testMode: true
         },
         // Still provide fallback data
         total: DEFAULT_AGENTS.length,
