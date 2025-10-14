@@ -1,0 +1,18 @@
+{
+  "name": "azure-functions-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for Origin Institute application",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests specified\""
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": ["azure-functions", "api"],
+  "author": "Origin Institute",
+  "license": "ISC"
+}

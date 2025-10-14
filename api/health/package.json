@@ -1,7 +1,7 @@
 {
-  "name": "agent-list-api",
+  "name": "health-api",
   "version": "1.0.0",
-  "description": "Agent list API function",
+  "description": "Health check API function",
   "main": "index.js",
   "type": "commonjs",
   "engines": {
@@ -11,7 +11,7 @@
     "start": "node index.js"
   },
   "dependencies": {},
-  "keywords": ["azure-functions", "agent-list"],
+  "keywords": ["azure-functions", "health-check"],
   "author": "Origin Institute",
   "license": "ISC"
 }
