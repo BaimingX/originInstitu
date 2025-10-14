@@ -1,9 +1,5 @@
 const fs = require('fs/promises');
 const path = require('path');
-const http = require('http');
-const https = require('https');
-
-const cheerio = require('cheerio');
 
 const UPSTREAM = 'https://origininstitute.rtomanager.com.au/Publics/PublicsPages/AgentListByCountry.aspx';
 
@@ -21,23 +17,21 @@ const DEFAULT_AGENTS = [
 
 // Use native fetch for now to isolate the problem
 
+// Helper function to extract text between tags using regex
+function extractTextBetween(html, pattern) {
+  const match = html.match(pattern);
+  return match ? match[1].trim() : '';
+}
+
+// Helper function to extract href attribute
+function extractHref(html, pattern) {
+  const match = html.match(pattern);
+  return match ? match[1] : '';
+}
+
 module.exports = async function (context, req) {
   try {
-    context.log('=== Agent list function started (fixed cheerio version) ===');
-
-    // Test cheerio first
-    try {
-      const testHtml = '<div>test</div>';
-      const test$ = cheerio.load(testHtml);
-      const testText = test$('div').text();
-      context.log('Cheerio test successful:', testText === 'test');
-    } catch (cheerioError) {
-      context.log.error('Cheerio test failed:', {
-        name: cheerioError.name,
-        message: cheerioError.message
-      });
-      throw new Error(`Cheerio initialization failed: ${cheerioError.message}`);
-    }
+    context.log('=== Agent list function started (NO DEPENDENCIES VERSION) ===');
 
     // Load HTML
     let html = null;
@@ -71,24 +65,30 @@ module.exports = async function (context, req) {
       context.log('HTML fetched successfully, length:', html.length);
     }
 
-    // Parse with cheerio
-    const $ = cheerio.load(html);
+    // Parse with regex instead of cheerio
     const agents = [];
 
-    $('table.agent-list div.agent-listwrap').each((i, el) => {
-      const $el = $(el);
-      const name = $el.find("div.agentname span[id*='lblAgentName']").text().trim();
+    // Find all agent wrapper divs using regex
+    const agentWrapperRegex = /<div[^>]*class="agent-listwrap"[^>]*>([\s\S]*?)<\/div>/gi;
+    let match;
 
-      if (!name) return;
+    while ((match = agentWrapperRegex.exec(html)) !== null) {
+      const agentHtml = match[1];
 
-      const contact = $el.find("span[id*='lblContactPerson']").text().trim();
-      const addr1 = $el.find("span[id*='lblAddress']").text().trim();
-      const stateLine = $el.find("span[id*='lblState']").text().trim();
-      const country = $el.find("span[id*='lblCountry']").text().trim();
-      const phone = $el.find("span[id*='lblPhone']").text().trim();
-      const emailText = $el.find("a[id*='lblEmail']").text().trim();
-      const webHref = $el.find("a[id*='lblWeb']").attr('href') || '';
-      const webText = $el.find("a[id*='lblWeb']").text().trim();
+      // Extract agent name
+      const name = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*>(.*?)<\/span>/i);
+
+      if (!name) continue; // Skip if no name found
+
+      // Extract other fields using regex
+      const contact = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblContactPerson[^"]*"[^>]*>(.*?)<\/span>/i);
+      const addr1 = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblAddress[^"]*"[^>]*>(.*?)<\/span>/i);
+      const stateLine = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblState[^"]*"[^>]*>(.*?)<\/span>/i);
+      const country = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblCountry[^"]*"[^>]*>(.*?)<\/span>/i);
+      const phone = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblPhone[^"]*"[^>]*>(.*?)<\/span>/i);
+      const emailText = extractTextBetween(agentHtml, /<a[^>]*id="[^"]*lblEmail[^"]*"[^>]*>(.*?)<\/a>/i);
+      const webHref = extractHref(agentHtml, /<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*href="([^"]*)"[^>]*>/i);
+      const webText = extractTextBetween(agentHtml, /<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*>(.*?)<\/a>/i);
 
       const emails = emailText ? [emailText.toLowerCase()] : [];
       const phones = phone ? [phone.replace(/\s+/g, ' ').trim()] : [];
@@ -112,7 +112,7 @@ module.exports = async function (context, req) {
         phones,
         websites: [...websitesSet]
       });
-    });
+    }
 
     // Dedup + sort
     const deduped = [];
@@ -145,7 +145,7 @@ module.exports = async function (context, req) {
         total: finalAgents.length,
         items: finalAgents,
         diagnostics: {
-          cheerioVersion: '1.0.0-rc.12',
+          parseMethod: 'regex (no dependencies)',
           extractedCount: agents.length,
           dedupedCount: deduped.length,
           usingFallback: deduped.length === 0
@@ -153,7 +153,7 @@ module.exports = async function (context, req) {
       })
     };
 
-    context.log('=== Function completed successfully ===');
+    context.log('=== Function completed successfully (NO DEPENDENCIES) ===');
   } catch (err) {
     const errorDetails = {
       name: err.name || 'Unknown',
@@ -185,9 +185,9 @@ module.exports = async function (context, req) {
           name: err.name || 'UnknownError',
           message: err.message || 'Function failed',
           code: err.code,
-          details: `Fixed cheerio version - function error: ${err.message}`,
+          details: `No dependencies version - function error: ${err.message}`,
           timestamp: errorDetails.timestamp,
-          cheerioVersion: '1.0.0-rc.12'
+          parseMethod: 'regex (no dependencies)'
         },
         // Still provide fallback data
         total: DEFAULT_AGENTS.length,

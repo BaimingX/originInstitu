@@ -1,8 +1,5 @@
 {
   "name": "agent-list-api",
   "version": "1.0.0",
-  "type": "commonjs",
-  "dependencies": {
-    "cheerio": "1.0.0-rc.12"
-  }
+  "type": "commonjs"
 }
