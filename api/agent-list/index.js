@@ -23,11 +23,46 @@ const DEFAULT_AGENTS = [
 module.exports = async function (context, req) {
   try {
     context.log('=== Agent list function started ===');
-    context.log('Environment check:', {
+
+    // Enhanced runtime diagnostics
+    context.log('=== COMPREHENSIVE RUNTIME DIAGNOSTICS ===');
+    context.log('Node.js version:', process.version);
+    context.log('Platform:', process.platform);
+    context.log('Architecture:', process.arch);
+    context.log('Current working directory:', process.cwd());
+    context.log('Function app directory:', __dirname);
+
+    context.log('Environment variables:', {
       LOCAL_EXAMPLE_HTML: process.env.LOCAL_EXAMPLE_HTML,
       NODE_ENV: process.env.NODE_ENV,
-      hasCheerio: !!cheerio
+      AZURE_FUNCTIONS_ENVIRONMENT: process.env.AZURE_FUNCTIONS_ENVIRONMENT,
+      FUNCTIONS_WORKER_RUNTIME: process.env.FUNCTIONS_WORKER_RUNTIME,
+      WEBSITE_NODE_DEFAULT_VERSION: process.env.WEBSITE_NODE_DEFAULT_VERSION
     });
+
+    // Check for fetch API availability
+    context.log('API availability check:', {
+      hasFetch: typeof fetch !== 'undefined',
+      hasGlobalFetch: typeof global.fetch !== 'undefined',
+      hasCheerio: !!cheerio,
+      cheerioVersion: cheerio.version || 'unknown'
+    });
+
+    // Try to load cheerio first to ensure it works
+    try {
+      const testHtml = '<div>test</div>';
+      const test$ = cheerio.load(testHtml);
+      const testText = test$('div').text();
+      context.log('Cheerio test successful:', testText === 'test');
+    } catch (cheerioError) {
+      context.log.error('Cheerio test failed:', {
+        name: cheerioError.name,
+        message: cheerioError.message,
+        stack: cheerioError.stack
+      });
+      throw new Error(`Cheerio initialization failed: ${cheerioError.message}`);
+    }
+
     context.log('Fetching agent list from:', UPSTREAM);
 
     // 1) Load HTML: local example.html for dev, else upstream
@@ -52,52 +87,150 @@ module.exports = async function (context, req) {
       try {
         context.log('About to fetch with basic options');
 
-        const r = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        // Try fetch API first, fallback to http/https modules
+        if (typeof fetch !== 'undefined') {
+          context.log('Using fetch API');
+          const r = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+
+          context.log('Fetch completed, status:', r.status);
+
+          context.log('Fetch response:', {
+            status: r.status,
+            statusText: r.statusText,
+            contentType: r.headers.get('content-type'),
+            contentLength: r.headers.get('content-length')
+          });
+
+          if (!r.ok) {
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
           }
-        });
 
-        context.log('Fetch completed, status:', r.status);
+          html = await r.text();
+          context.log('HTML fetched successfully with fetch API, length:', html.length);
 
-        context.log('Fetch response:', {
-          status: r.status,
-          statusText: r.statusText,
-          contentType: r.headers.get('content-type'),
-          contentLength: r.headers.get('content-length')
-        });
+        } else {
+          context.log('Fetch API not available, using http/https modules');
 
-        if (!r.ok) {
-          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+          // Fallback to http/https modules
+          html = await new Promise((resolve, reject) => {
+            const client = url.startsWith('https:') ? https : http;
+            const urlObj = new URL(url);
+
+            const options = {
+              hostname: urlObj.hostname,
+              port: urlObj.port,
+              path: urlObj.pathname + urlObj.search,
+              method: 'GET',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            };
+
+            context.log('Making HTTP request with options:', options);
+
+            const req = client.request(options, (res) => {
+              context.log('HTTP response status:', res.statusCode);
+              context.log('HTTP response headers:', res.headers);
+
+              if (res.statusCode < 200 || res.statusCode >= 300) {
+                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+                return;
+              }
+
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                context.log('HTTP request completed, data length:', data.length);
+                resolve(data);
+              });
+            });
+
+            req.on('error', (error) => {
+              context.log.error('HTTP request error:', error);
+              reject(error);
+            });
+
+            req.setTimeout(30000, () => {
+              context.log.error('HTTP request timeout');
+              req.destroy();
+              reject(new Error('Request timeout after 30 seconds'));
+            });
+
+            req.end();
+          });
+
+          context.log('HTML fetched successfully with http/https modules, length:', html.length);
         }
-
-        html = await r.text();
-        context.log('HTML fetched successfully, length:', html.length);
 
         if (refresh) {
           context.log('Cache busting applied for fresh data fetch');
         }
 
       } catch (fetchError) {
-        context.log.error('Fetch failed:', {
+        context.log.error('Request failed:', {
           name: fetchError.name,
           message: fetchError.message,
           code: fetchError.code,
-          url: url
+          url: url,
+          fetchAvailable: typeof fetch !== 'undefined'
         });
         throw fetchError;
       }
     }
 
     // 2) Parse DOM using explicit structure present in the page
-    const $ = cheerio.load(html);
+    context.log('=== HTML PARSING PHASE ===');
+    context.log('HTML content preview (first 500 chars):', html.substring(0, 500));
+    context.log('HTML content preview (last 500 chars):', html.substring(html.length - 500));
+
+    let $;
+    try {
+      $ = cheerio.load(html);
+      context.log('Cheerio load successful');
+    } catch (cheerioError) {
+      context.log.error('Failed to load HTML with cheerio:', {
+        name: cheerioError.name,
+        message: cheerioError.message,
+        stack: cheerioError.stack
+      });
+      throw new Error(`HTML parsing failed: ${cheerioError.message}`);
+    }
+
     const agents = [];
+
+    // Check if the expected table structure exists
+    const agentListTable = $('table.agent-list');
+    const agentWrappers = $('table.agent-list div.agent-listwrap');
+
+    context.log('DOM structure check:', {
+      agentListTableFound: agentListTable.length,
+      agentWrappersFound: agentWrappers.length,
+      totalTableElements: $('table').length,
+      totalDivElements: $('div').length
+    });
+
+    if (agentWrappers.length === 0) {
+      context.log('WARNING: No agent wrappers found. HTML structure may have changed.');
+      context.log('Available table classes:', $('table').map((i, el) => $(el).attr('class')).get());
+      context.log('Available div classes sample (first 10):', $('div').slice(0, 10).map((i, el) => $(el).attr('class')).get());
+    }
 
     $('table.agent-list div.agent-listwrap').each((i, el) => {
       const $el = $(el);
 
+      context.log(`Processing agent ${i + 1}:`);
+
       const name = $el.find("div.agentname span[id*='lblAgentName']").text().trim();
-      if (!name) return; // skip noise
+      context.log(`  Name: "${name}"`);
+
+      if (!name) {
+        context.log(`  Skipping agent ${i + 1} - no name found`);
+        return; // skip noise
+      }
 
       const contact = $el.find("span[id*='lblContactPerson']").text().trim();
       const addr1 = $el.find("span[id*='lblAddress']").text().trim();
@@ -107,6 +240,8 @@ module.exports = async function (context, req) {
       const emailText = $el.find("a[id*='lblEmail']").text().trim();
       const webHref = $el.find("a[id*='lblWeb']").attr('href') || '';
       const webText = $el.find("a[id*='lblWeb']").text().trim();
+
+      context.log(`  Contact: "${contact}", Country: "${country}", Phone: "${phone}"`);
 
       const emails = emailText ? [emailText.toLowerCase()] : [];
       const phones = phone ? [phone.replace(/\s+/g, ' ').trim()] : [];
@@ -119,7 +254,7 @@ module.exports = async function (context, req) {
       pushUrl(webHref);
       if (webText && webText !== webHref) pushUrl(webText);
 
-      agents.push({
+      const agent = {
         name,
         contact,
         country,
@@ -127,10 +262,16 @@ module.exports = async function (context, req) {
         emails,
         phones,
         websites: [...websitesSet]
-      });
+      };
+
+      context.log(`  Final agent object:`, agent);
+      agents.push(agent);
     });
 
+    context.log(`Total agents extracted: ${agents.length}`);
+
     // 3) Dedup + sort
+    context.log('=== POST-PROCESSING PHASE ===');
     const deduped = [];
     const seen = new Set();
     for (const a of agents) {
@@ -139,7 +280,16 @@ module.exports = async function (context, req) {
     }
     deduped.sort((a, b) => a.name.localeCompare(b.name));
 
+    context.log(`Deduplication: ${agents.length} → ${deduped.length} agents`);
+
     const finalAgents = deduped.length ? deduped : DEFAULT_AGENTS;
+    const usingFallback = deduped.length === 0;
+
+    if (usingFallback) {
+      context.log('WARNING: Using fallback DEFAULT_AGENTS due to no agents extracted');
+    }
+
+    context.log(`Final agent count: ${finalAgents.length} (fallback: ${usingFallback})`);
 
     // 4) Respond JSON
     const isDev = process.env.LOCAL_EXAMPLE_HTML === 'false' && process.env.NODE_ENV !== 'production';
@@ -147,19 +297,44 @@ module.exports = async function (context, req) {
       ? 'public, max-age=60, s-maxage=300' // Shorter cache for development
       : 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 
+    const responseBody = {
+      source: process.env.LOCAL_EXAMPLE_HTML === 'true' ? 'local' : UPSTREAM,
+      updatedAt: new Date().toISOString(),
+      total: finalAgents.length,
+      items: finalAgents,
+      // Add diagnostic info to response
+      diagnostics: {
+        htmlLength: html.length,
+        extractedAgents: agents.length,
+        dedupedAgents: deduped.length,
+        usingFallback: usingFallback,
+        fetchMethod: typeof fetch !== 'undefined' ? 'fetch' : 'http',
+        nodeVersion: process.version,
+        environment: {
+          LOCAL_EXAMPLE_HTML: process.env.LOCAL_EXAMPLE_HTML,
+          NODE_ENV: process.env.NODE_ENV
+        }
+      }
+    };
+
+    context.log('=== RESPONSE GENERATION ===');
+    context.log('Response body preview:', {
+      source: responseBody.source,
+      total: responseBody.total,
+      usingFallback: responseBody.diagnostics.usingFallback,
+      extractedCount: responseBody.diagnostics.extractedAgents
+    });
+
     context.res = {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': cacheControl,
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({
-        source: process.env.LOCAL_EXAMPLE_HTML === 'true' ? 'local' : UPSTREAM,
-        updatedAt: new Date().toISOString(),
-        total: finalAgents.length,
-        items: finalAgents
-      })
+      body: JSON.stringify(responseBody)
     };
+
+    context.log('=== FUNCTION COMPLETED SUCCESSFULLY ===');
   } catch (err) {
     const errorDetails = {
       name: err.name || 'Unknown',
