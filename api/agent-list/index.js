@@ -73,9 +73,18 @@ module.exports = async function (context, req) {
     let match;
 
     context.log('Parsing HTML for agent data...');
+    context.log('HTML length:', html.length);
+    context.log('HTML contains "agent-listwrap":', html.includes('agent-listwrap'));
 
+    // Test regex matching
+    const testMatches = html.match(/<div[^>]*class="agent-listwrap"/g);
+    context.log('Simple pattern matches:', testMatches ? testMatches.length : 0);
+
+    let matchCount = 0;
     while ((match = agentWrapperRegex.exec(html)) !== null) {
+      matchCount++;
       const agentHtml = match[1];
+      context.log(`Processing agent ${matchCount}, content length: ${agentHtml.length}`);
 
       // Extract agent name (wrapped in <b> tags)
       const nameMatch = agentHtml.match(/<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*><b>(.*?)<\/b><\/span>/i);
