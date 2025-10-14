@@ -51,11 +51,21 @@ module.exports = async function (context, req) {
 
       context.log('Fetching from upstream:', url);
 
+      // Add timeout to prevent Azure Functions from being terminated
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        context.log('Fetch timeout, aborting request...');
+        controller.abort();
+      }, 25000); // 25 second timeout (Azure Functions has 30s default)
+
       const r = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!r.ok) {
         throw new Error(`HTTP ${r.status}: ${r.statusText}`);
@@ -63,6 +73,18 @@ module.exports = async function (context, req) {
 
       html = await r.text();
       context.log('HTML fetched successfully, length:', html.length);
+    } catch (fetchError) {
+      if (fetchError.name === 'AbortError') {
+        context.log.error('Fetch request timed out after 25 seconds');
+        throw new Error('Request timeout - upstream server too slow');
+      } else {
+        context.log.error('Fetch failed:', {
+          name: fetchError.name,
+          message: fetchError.message,
+          code: fetchError.code
+        });
+        throw fetchError;
+      }
     }
 
     // Parse with regex instead of cheerio
@@ -73,18 +95,9 @@ module.exports = async function (context, req) {
     let match;
 
     context.log('Parsing HTML for agent data...');
-    context.log('HTML length:', html.length);
-    context.log('HTML contains "agent-listwrap":', html.includes('agent-listwrap'));
 
-    // Test regex matching
-    const testMatches = html.match(/<div[^>]*class="agent-listwrap"/g);
-    context.log('Simple pattern matches:', testMatches ? testMatches.length : 0);
-
-    let matchCount = 0;
     while ((match = agentWrapperRegex.exec(html)) !== null) {
-      matchCount++;
       const agentHtml = match[1];
-      context.log(`Processing agent ${matchCount}, content length: ${agentHtml.length}`);
 
       // Extract agent name (wrapped in <b> tags)
       const nameMatch = agentHtml.match(/<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*><b>(.*?)<\/b><\/span>/i);
@@ -206,9 +219,12 @@ module.exports = async function (context, req) {
           name: err.name || 'UnknownError',
           message: err.message || 'Function failed',
           code: err.code,
-          details: `No dependencies version - function error: ${err.message}`,
+          details: err.name === 'AbortError'
+            ? 'Request timeout - upstream server response too slow'
+            : `Function error: ${err.message}`,
           timestamp: errorDetails.timestamp,
-          parseMethod: 'regex (no dependencies)'
+          parseMethod: 'regex (no dependencies)',
+          isTimeout: err.name === 'AbortError'
         },
         // Still provide fallback data
         total: DEFAULT_AGENTS.length,
