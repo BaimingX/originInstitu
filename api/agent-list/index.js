@@ -1,5 +1,7 @@
 const fs = require('fs/promises');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 const cheerio = require('cheerio');
 
 const UPSTREAM = 'https://origininstitute.rtomanager.com.au/Publics/PublicsPages/AgentListByCountry.aspx';
@@ -16,8 +18,16 @@ const DEFAULT_AGENTS = [
   }
 ];
 
+// Use native fetch for now to isolate the problem
+
 module.exports = async function (context, req) {
   try {
+    context.log('=== Agent list function started ===');
+    context.log('Environment check:', {
+      LOCAL_EXAMPLE_HTML: process.env.LOCAL_EXAMPLE_HTML,
+      NODE_ENV: process.env.NODE_ENV,
+      hasCheerio: !!cheerio
+    });
     context.log('Fetching agent list from:', UPSTREAM);
 
     // 1) Load HTML: local example.html for dev, else upstream
@@ -37,17 +47,45 @@ module.exports = async function (context, req) {
       const refresh = req.query?.refresh === 'true';
       const url = refresh ? `${UPSTREAM}?_cb=${Date.now()}` : UPSTREAM;
 
-      const r = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (AgentListProxy/1.0)',
-          'Cache-Control': refresh ? 'no-cache, no-store, must-revalidate' : 'max-age=300'
-        }
-      });
-      if (!r.ok) throw new Error('upstream status ' + r.status);
-      html = await r.text();
+      context.log('Fetching from upstream:', url);
 
-      if (refresh) {
-        context.log('Cache busting applied for fresh data fetch');
+      try {
+        context.log('About to fetch with basic options');
+
+        const r = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+
+        context.log('Fetch completed, status:', r.status);
+
+        context.log('Fetch response:', {
+          status: r.status,
+          statusText: r.statusText,
+          contentType: r.headers.get('content-type'),
+          contentLength: r.headers.get('content-length')
+        });
+
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+
+        html = await r.text();
+        context.log('HTML fetched successfully, length:', html.length);
+
+        if (refresh) {
+          context.log('Cache busting applied for fresh data fetch');
+        }
+
+      } catch (fetchError) {
+        context.log.error('Fetch failed:', {
+          name: fetchError.name,
+          message: fetchError.message,
+          code: fetchError.code,
+          url: url
+        });
+        throw fetchError;
       }
     }
 
@@ -124,30 +162,43 @@ module.exports = async function (context, req) {
     };
   } catch (err) {
     const errorDetails = {
+      name: err.name || 'Unknown',
       message: err.message || 'Unknown error',
       stack: err.stack,
+      code: err.code,
       timestamp: new Date().toISOString(),
       upstream: UPSTREAM,
-      localMode: process.env.LOCAL_EXAMPLE_HTML === 'true'
+      localMode: process.env.LOCAL_EXAMPLE_HTML === 'true',
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        LOCAL_EXAMPLE_HTML: process.env.LOCAL_EXAMPLE_HTML
+      }
     };
 
-    context.log.error('Agent list parsing error:', errorDetails);
+    context.log.error('=== FUNCTION ERROR ===', errorDetails);
 
+    // Return structured error response instead of letting function crash
     context.res = {
+      status: 500,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*'
       },
       body: JSON.stringify({
-        source: 'fallback',
+        source: 'error',
         updatedAt: new Date().toISOString(),
-        total: DEFAULT_AGENTS.length,
-        items: DEFAULT_AGENTS,
         error: {
-          message: 'Failed to fetch from upstream, using fallback data',
-          details: errorDetails.message,
-          timestamp: errorDetails.timestamp
-        }
+          name: err.name || 'UnknownError',
+          message: err.message || 'Function failed',
+          code: err.code,
+          details: `Failed to fetch agents from ${UPSTREAM}: ${err.message}`,
+          timestamp: errorDetails.timestamp,
+          isTimeout: err.name === 'AbortError',
+          isFetchError: err.name === 'TypeError' && err.message.includes('fetch')
+        },
+        // Still provide fallback data
+        total: DEFAULT_AGENTS.length,
+        items: DEFAULT_AGENTS
       })
     };
   }
