@@ -75,8 +75,9 @@ module.exports = async function (context, req) {
     while ((match = agentWrapperRegex.exec(html)) !== null) {
       const agentHtml = match[1];
 
-      // Extract agent name
-      const name = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*>(.*?)<\/span>/i);
+      // Extract agent name (wrapped in <b> tags)
+      const nameMatch = agentHtml.match(/<span[^>]*id="[^"]*lblAgentName[^"]*"[^>]*><b>(.*?)<\/b><\/span>/i);
+      const name = nameMatch ? nameMatch[1].trim() : '';
 
       if (!name) continue; // Skip if no name found
 
@@ -86,9 +87,15 @@ module.exports = async function (context, req) {
       const stateLine = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblState[^"]*"[^>]*>(.*?)<\/span>/i);
       const country = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblCountry[^"]*"[^>]*>(.*?)<\/span>/i);
       const phone = extractTextBetween(agentHtml, /<span[^>]*id="[^"]*lblPhone[^"]*"[^>]*>(.*?)<\/span>/i);
-      const emailText = extractTextBetween(agentHtml, /<a[^>]*id="[^"]*lblEmail[^"]*"[^>]*>(.*?)<\/a>/i);
-      const webHref = extractHref(agentHtml, /<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*href="([^"]*)"[^>]*>/i);
-      const webText = extractTextBetween(agentHtml, /<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*>(.*?)<\/a>/i);
+
+      // Extract email text and href
+      const emailMatch = agentHtml.match(/<a[^>]*id="[^"]*lblEmail[^"]*"[^>]*href="mailto:([^"]*)"[^>]*>(.*?)<\/a>/i);
+      const emailText = emailMatch ? emailMatch[2].trim() : '';
+
+      // Extract web href and text
+      const webMatch = agentHtml.match(/<a[^>]*id="[^"]*lblWeb[^"]*"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/i);
+      const webHref = webMatch ? webMatch[1] : '';
+      const webText = webMatch ? webMatch[2].trim() : '';
 
       const emails = emailText ? [emailText.toLowerCase()] : [];
       const phones = phone ? [phone.replace(/\s+/g, ' ').trim()] : [];
