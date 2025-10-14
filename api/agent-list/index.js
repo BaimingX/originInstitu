@@ -68,17 +68,11 @@ module.exports = async function (context, req) {
     // Parse with regex instead of cheerio
     const agents = [];
 
-    // Find all agent wrapper divs using regex (they're inside <td> elements)
-    const agentWrapperRegex = /<div[^>]*class="agent-listwrap"[^>]*>([\s\S]*?)<\/div>/gi;
+    // Find all agent wrapper divs using regex - match complete content until </td> or next <td>
+    const agentWrapperRegex = /<div[^>]*class="agent-listwrap"[^>]*>([\s\S]*?)<\/div>(?=\s*<\/td>|\s*<td>|\s*<\/tr>|$)/gi;
     let match;
 
-    context.log('Searching for agent-listwrap divs in HTML...');
-    context.log('HTML length:', html.length);
-    context.log('HTML contains agent-listwrap:', html.includes('agent-listwrap'));
-
-    // Test if our regex can find the divs
-    const testMatches = html.match(/<div[^>]*class="agent-listwrap"/g);
-    context.log('Found agent-listwrap divs:', testMatches ? testMatches.length : 0);
+    context.log('Parsing HTML for agent data...');
 
     while ((match = agentWrapperRegex.exec(html)) !== null) {
       const agentHtml = match[1];
