@@ -86,6 +86,124 @@ function parseAgentsFromHtml(html) {
   return agents;
 }
 
+// Enhanced fetch function with retry mechanism and detailed diagnostics
+async function fetchAgentsWithRetry(context, url, maxRetries = 3) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    context.log(`=== FETCH ATTEMPT ${attempt}/${maxRetries} ===`);
+
+    try {
+      // Enhanced headers to mimic real browser
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      };
+
+      context.log(`Request headers:`, Object.keys(headers).join(', '));
+      context.log(`Timeout: 60 seconds`);
+
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
+
+      const startTime = Date.now();
+      context.log(`Starting fetch at ${new Date().toISOString()}`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: headers,
+        signal: controller.signal,
+        redirect: 'follow'
+      });
+
+      clearTimeout(timeoutId);
+      const fetchTime = Date.now() - startTime;
+      context.log(`Fetch completed in ${fetchTime}ms`);
+
+      // Log response details
+      context.log(`Response status: ${response.status} ${response.statusText}`);
+      context.log(`Response headers:`, {
+        'content-type': response.headers.get('content-type'),
+        'content-length': response.headers.get('content-length'),
+        'server': response.headers.get('server'),
+        'x-powered-by': response.headers.get('x-powered-by')
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const htmlContent = await response.text();
+      const contentLength = htmlContent.length;
+      context.log(`HTML content received: ${contentLength} characters`);
+
+      // Quick validation - check if content looks like HTML
+      if (!htmlContent.includes('<html') && !htmlContent.includes('<!DOCTYPE')) {
+        throw new Error(`Invalid HTML content received (length: ${contentLength})`);
+      }
+
+      // Check for specific elements we need
+      const hasAgentList = htmlContent.includes('ctl00_Main_DataList2');
+      context.log(`Contains agent list elements: ${hasAgentList}`);
+
+      if (!hasAgentList) {
+        throw new Error('HTML content does not contain expected agent list elements');
+      }
+
+      const agents = parseAgentsFromHtml(htmlContent);
+      context.log(`Successfully parsed ${agents.length} agents from upstream`);
+
+      if (agents.length === 0) {
+        throw new Error('No agents found in HTML content');
+      }
+
+      return agents;
+
+    } catch (error) {
+      lastError = error;
+      context.log.error(`Attempt ${attempt} failed:`, {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        type: error.constructor.name
+      });
+
+      if (error.name === 'AbortError') {
+        context.log.error('Request timed out after 60 seconds');
+      } else if (error.code === 'ENOTFOUND') {
+        context.log.error('DNS resolution failed - domain not found');
+      } else if (error.code === 'ECONNREFUSED') {
+        context.log.error('Connection refused by target server');
+      } else if (error.code === 'ETIMEDOUT') {
+        context.log.error('Connection timed out');
+      }
+
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        context.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+
+  // All retries failed
+  context.log.error(`All ${maxRetries} attempts failed. Final error:`, lastError.message);
+  context.log.error('Falling back to default agents');
+
+  return DEFAULT_AGENTS;
+}
+
 module.exports = async function (context, req) {
   try {
     context.log('=== AGENT LIST SCRAPER STARTING ===');
@@ -109,31 +227,13 @@ module.exports = async function (context, req) {
         source = 'fallback';
       }
     } else {
-      context.log(`Fetching agents from upstream: ${UPSTREAM}`);
-      try {
-        const response = await fetch(UPSTREAM, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          },
-          timeout: 30000
-        });
+      context.log(`=== STARTING UPSTREAM FETCH ===`);
+      context.log(`Target URL: ${UPSTREAM}`);
+      context.log(`Environment: Azure Functions v${process.version} on ${process.platform}`);
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const htmlContent = await response.text();
-        agents = parseAgentsFromHtml(htmlContent);
-        source = 'upstream';
-        context.log(`Successfully parsed ${agents.length} agents from upstream`);
-
-      } catch (fetchErr) {
-        context.log.error('Error fetching from upstream:', fetchErr.message);
-        agents = DEFAULT_AGENTS;
-        source = 'fallback';
-      }
+      // Enhanced fetch with retry mechanism
+      agents = await fetchAgentsWithRetry(context, UPSTREAM);
+      source = agents.length > 1 ? 'upstream' : 'fallback';
     }
 
     const responseBody = {
