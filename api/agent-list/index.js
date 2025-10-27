@@ -86,18 +86,23 @@ function parseAgentsFromHtml(html) {
   return agents;
 }
 
-// Enhanced fetch function with retry mechanism and detailed diagnostics
+// Enhanced fetch function with two-step request strategy to bypass anti-scraping
 async function fetchAgentsWithRetry(context, url, maxRetries = 3) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    context.log(`=== FETCH ATTEMPT ${attempt}/${maxRetries} ===`);
+    context.log(`=== ANTI-SCRAPING BYPASS ATTEMPT ${attempt}/${maxRetries} ===`);
 
     try {
-      // Enhanced headers to mimic real browser
-      const headers = {
+      // STEP 1: Visit homepage first to establish session
+      const baseUrl = 'https://origininstitute.rtomanager.com.au';
+      const homepageUrl = `${baseUrl}/`;
+
+      context.log('STEP 1: Visiting homepage to establish session...');
+
+      const homeHeaders = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
         'Connection': 'keep-alive',
@@ -105,30 +110,73 @@ async function fetchAgentsWithRetry(context, url, maxRetries = 3) {
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Cache-Control': 'no-cache'
       };
 
-      context.log(`Request headers:`, Object.keys(headers).join(', '));
-      context.log(`Timeout: 60 seconds`);
+      const homeController = new AbortController();
+      const homeTimeoutId = setTimeout(() => homeController.abort(), 30000);
 
-      // Create AbortController for timeout
+      const homeResponse = await fetch(homepageUrl, {
+        method: 'GET',
+        headers: homeHeaders,
+        signal: homeController.signal,
+        redirect: 'follow'
+      });
+
+      clearTimeout(homeTimeoutId);
+      context.log(`Homepage response: ${homeResponse.status} ${homeResponse.statusText}`);
+
+      // Extract cookies from homepage response
+      let cookies = '';
+      const setCookieHeaders = homeResponse.headers.get('set-cookie');
+      if (setCookieHeaders) {
+        cookies = setCookieHeaders.split(';')[0]; // Get first cookie
+        context.log(`Extracted cookies: ${cookies}`);
+      }
+
+      // Wait a bit to mimic human behavior
+      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+
+      // STEP 2: Now visit target page with referer and cookies
+      context.log('STEP 2: Visiting agent list page with session...');
+
+      const targetHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Referer': homepageUrl,
+        'Cache-Control': 'no-cache'
+      };
+
+      // Add cookies if we have them
+      if (cookies) {
+        targetHeaders['Cookie'] = cookies;
+      }
+
+      context.log(`Target request headers:`, Object.keys(targetHeaders).join(', '));
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const startTime = Date.now();
-      context.log(`Starting fetch at ${new Date().toISOString()}`);
+      context.log(`Starting target fetch at ${new Date().toISOString()}`);
 
       const response = await fetch(url, {
         method: 'GET',
-        headers: headers,
+        headers: targetHeaders,
         signal: controller.signal,
         redirect: 'follow'
       });
 
       clearTimeout(timeoutId);
       const fetchTime = Date.now() - startTime;
-      context.log(`Fetch completed in ${fetchTime}ms`);
+      context.log(`Target fetch completed in ${fetchTime}ms`);
 
       // Log response details
       context.log(`Response status: ${response.status} ${response.statusText}`);
@@ -161,7 +209,7 @@ async function fetchAgentsWithRetry(context, url, maxRetries = 3) {
       }
 
       const agents = parseAgentsFromHtml(htmlContent);
-      context.log(`Successfully parsed ${agents.length} agents from upstream`);
+      context.log(`🎉 SUCCESS: Parsed ${agents.length} agents from upstream with anti-scraping bypass!`);
 
       if (agents.length === 0) {
         throw new Error('No agents found in HTML content');
@@ -179,7 +227,7 @@ async function fetchAgentsWithRetry(context, url, maxRetries = 3) {
       });
 
       if (error.name === 'AbortError') {
-        context.log.error('Request timed out after 60 seconds');
+        context.log.error('Request timed out');
       } else if (error.code === 'ENOTFOUND') {
         context.log.error('DNS resolution failed - domain not found');
       } else if (error.code === 'ECONNREFUSED') {
