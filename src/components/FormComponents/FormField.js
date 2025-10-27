@@ -3,7 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import { validationRules } from '../../utils/validation';
 
 const FormField = ({ field, register, error, customValidation }) => {
-  const { name, label, type, required, placeholder, maxLength, rows, options } = field;
+  const { name, label, type, required, placeholder, maxLength, rows, options, optgroups } = field;
 
   const renderInput = () => {
     const validationRule = customValidation || validationRules[name] || {};
@@ -21,11 +21,23 @@ const FormField = ({ field, register, error, customValidation }) => {
           className={`${commonProps.className} bg-white pr-10 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzZCNzI4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')] bg-no-repeat bg-[position:calc(100%-12px)_center]`}
         >
           <option value="">{placeholder}</option>
-          {options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          {optgroups ? (
+            optgroups.map((group, groupIndex) => (
+              <optgroup key={groupIndex} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))
+          ) : (
+            options?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))
+          )}
         </select>
       );
     }

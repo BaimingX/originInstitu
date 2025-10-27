@@ -1846,10 +1846,88 @@ export const FORM_FIELDS = {
     type: 'select',
     required: false,
     placeholder: 'Please select',
-    options: [
-      { value: 'Mandarin', label: 'Mandarin' },
-      { value: 'Cantonese', label: 'Cantonese' }
+    optgroups: [
+      {
+        label: 'East Asia',
+        options: [
+          { value: 'Chinese - Mandarin', label: 'Chinese – Mandarin (普通话)' },
+          { value: 'Chinese - Cantonese', label: 'Chinese – Cantonese (粤语)' },
+          { value: 'Chinese - Shanghainese', label: 'Chinese – Shanghainese (吴语/上海话)' },
+          { value: 'Chinese - Hokkien/Taiwanese', label: 'Chinese – Hokkien/Taiwanese (闽南语/台语)' },
+          { value: 'Chinese - Teochew/Chaozhou', label: 'Chinese – Teochew/Chaozhou (潮汕话)' },
+          { value: 'Chinese - Hakka', label: 'Chinese – Hakka (客家话)' },
+          { value: 'Chinese - Fuzhou/Min Dong', label: 'Chinese – Fuzhou/Min Dong (福州话/闽东语)' },
+          { value: 'Tibetan', label: 'Tibetan (藏语)' },
+          { value: 'Mongolian', label: 'Mongolian (蒙古语)' },
+          { value: 'Korean', label: 'Korean (한국어/朝鲜语)' },
+          { value: 'Japanese', label: 'Japanese (日本語)' },
+          { value: 'Other (East Asia)', label: 'Other (East Asia) – please specify' }
+        ]
+      },
+      {
+        label: 'South Asia',
+        options: [
+          { value: 'Hindi', label: 'Hindi (हिन्दी)' },
+          { value: 'Urdu', label: 'Urdu (اُردُو)' },
+          { value: 'Bengali/Bangla', label: 'Bengali/Bangla (বাংলা)' },
+          { value: 'Punjabi (Gurmukhi)', label: 'Punjabi (Gurmukhi) (ਪੰਜਾਬੀ)' },
+          { value: 'Punjabi (Shahmukhi)', label: 'Punjabi (Shahmukhi) (پنجابی)' },
+          { value: 'Gujarati', label: 'Gujarati (ગુજરાતી)' },
+          { value: 'Marathi', label: 'Marathi (मराठी)' },
+          { value: 'Tamil', label: 'Tamil (தமிழ்)' },
+          { value: 'Telugu', label: 'Telugu (తెలుగు)' },
+          { value: 'Kannada', label: 'Kannada (ಕನ್ನಡ)' },
+          { value: 'Malayalam', label: 'Malayalam (മലയാളം)' },
+          { value: 'Odia/Oriya', label: 'Odia/Oriya (ଓଡ଼ିଆ)' },
+          { value: 'Sinhala/Sinhalese', label: 'Sinhala/Sinhalese (සිංහල)' },
+          { value: 'Nepali', label: 'Nepali (नेपाली)' },
+          { value: 'Sindhi', label: 'Sindhi (سنڌي/सिन्धी)' },
+          { value: 'Kashmiri', label: 'Kashmiri (کٲشُر/कॉशुर)' },
+          { value: 'Dhivehi/Maldivian', label: 'Dhivehi/Maldivian (ދިވެހި)' },
+          { value: 'Pashto', label: 'Pashto (پښتو)' },
+          { value: 'Other (South Asia)', label: 'Other (South Asia) – please specify' }
+        ]
+      },
+      {
+        label: 'Southeast Asia',
+        options: [
+          { value: 'Vietnamese', label: 'Vietnamese (Tiếng Việt)' },
+          { value: 'Khmer/Cambodian', label: 'Khmer/Cambodian (ភាសាខ្មែរ)' },
+          { value: 'Lao', label: 'Lao (ລາວ)' },
+          { value: 'Thai', label: 'Thai (ไทย)' },
+          { value: 'Burmese/Myanmar', label: 'Burmese/Myanmar (မြန်မာ)' },
+          { value: 'Karen - S\'gaw', label: 'Karen – S\'gaw (ကညီကျိ)' },
+          { value: 'Karen - Pwo', label: 'Karen – Pwo' },
+          { value: 'Hmong/Miao', label: 'Hmong/Miao (Hmong Daw/Njua)' },
+          { value: 'Indonesian', label: 'Indonesian / Bahasa Indonesia' },
+          { value: 'Javanese', label: 'Javanese (Basa Jawa)' },
+          { value: 'Sundanese', label: 'Sundanese (Basa Sunda)' },
+          { value: 'Malay', label: 'Malay / Bahasa Melayu' },
+          { value: 'Filipino', label: 'Filipino' },
+          { value: 'Tagalog', label: 'Tagalog' },
+          { value: 'Cebuano/Bisaya', label: 'Cebuano/Bisaya' },
+          { value: 'Ilocano', label: 'Ilocano' },
+          { value: 'Tetum', label: 'Tetum (Timor-Leste)' },
+          { value: 'Mon', label: 'Mon (ဘာသာ မန်)' },
+          { value: 'Other (Southeast Asia)', label: 'Other (Southeast Asia) – please specify' }
+        ]
+      },
+      {
+        label: 'General',
+        options: [
+          { value: 'Multiple languages', label: 'Multiple languages – specify primary' },
+          { value: 'Other', label: 'Other – please specify' },
+          { value: 'Prefer not to say / Unknown', label: 'Prefer not to say / Unknown' }
+        ]
+      }
     ]
+  },
+  languageSpokenAtHomeOther: {
+    name: 'languageSpokenAtHomeOther',
+    label: 'Please specify the language',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter language name'
   },
   wasEnglishInstructionLanguage: {
     name: 'wasEnglishInstructionLanguage',

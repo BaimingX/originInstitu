@@ -46,6 +46,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Watch for conditional field dependencies
   const hasPostalAddress = useWatch({ control, name: 'hasPostalAddress' });
   const isEnglishMainLanguage = useWatch({ control, name: 'isEnglishMainLanguage' });
+  const languageSpokenAtHome = useWatch({ control, name: 'languageSpokenAtHome' });
   const hasCompletedEnglishTest = useWatch({ control, name: 'hasCompletedEnglishTest' });
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
@@ -1461,11 +1462,23 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                     error={errors.isEnglishMainLanguage}
                   />
                   {isEnglishMainLanguage === 'No' && (
-                    <FormField
-                      field={FORM_FIELDS.languageSpokenAtHome}
-                      register={register}
-                      error={errors.languageSpokenAtHome}
-                    />
+                    <>
+                      <FormField
+                        field={FORM_FIELDS.languageSpokenAtHome}
+                        register={register}
+                        error={errors.languageSpokenAtHome}
+                      />
+                      {languageSpokenAtHome && (
+                        languageSpokenAtHome.includes('Other') || 
+                        languageSpokenAtHome === 'Multiple languages'
+                      ) && (
+                        <FormField
+                          field={FORM_FIELDS.languageSpokenAtHomeOther}
+                          register={register}
+                          error={errors.languageSpokenAtHomeOther}
+                        />
+                      )}
+                    </>
                   )}
                   <FormField
                     field={FORM_FIELDS.wasEnglishInstructionLanguage}

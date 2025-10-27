@@ -90,7 +90,11 @@ export const mapFormDataToJSON = (formData) => {
       VisaType: "Student Visa",
       VisaNumber: "V0000000",
       VisaExpiryDate: "",
-      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' ? 'English' : (formData.languageSpokenAtHome || ""),
+      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' 
+        ? 'English' 
+        : (formData.languageSpokenAtHome?.includes('Other') || formData.languageSpokenAtHome === 'Multiple languages')
+          ? (formData.languageSpokenAtHomeOther || formData.languageSpokenAtHome)
+          : (formData.languageSpokenAtHome || ""),
       HowWellEngSpeak: "",
       StudyReason: "04", // Default value
       CurrentEmployStatus: formData.currentEmploymentStatus || "",
@@ -284,7 +288,11 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
       VisaType: "Student Visa",
       VisaNumber: "V0000000",
       VisaExpiryDate: "",
-      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' ? 'English' : (formData.languageSpokenAtHome || ""),
+      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' 
+        ? 'English' 
+        : (formData.languageSpokenAtHome?.includes('Other') || formData.languageSpokenAtHome === 'Multiple languages')
+          ? (formData.languageSpokenAtHomeOther || formData.languageSpokenAtHome)
+          : (formData.languageSpokenAtHome || ""),
       HowWellEngSpeak: "",
       StudyReason: "04", // Default value
       CurrentEmployStatus: formData.currentEmploymentStatus || "",
