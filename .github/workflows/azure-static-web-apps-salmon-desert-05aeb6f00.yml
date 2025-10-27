@@ -33,10 +33,17 @@ jobs:
           output_location: "build" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
         env:
-          # React App Environment Variables
+          # React App Environment Variables - Power Automate
+          REACT_APP_POWER_AUTOMATE_STUDENT_FLOW_URL: ${{ secrets.REACT_APP_POWER_AUTOMATE_STUDENT_FLOW_URL }}
+          REACT_APP_POWER_AUTOMATE_AGENT_FLOW_URL: ${{ secrets.REACT_APP_POWER_AUTOMATE_AGENT_FLOW_URL }}
+          REACT_APP_POWER_AUTOMATE_FILE_TEST_URL: ${{ secrets.REACT_APP_POWER_AUTOMATE_FILE_TEST_URL }}
+          # React App Environment Variables - CRICOS API
           REACT_APP_CRICOS_API_BASE_URL: ${{ secrets.REACT_APP_CRICOS_API_BASE_URL }}
           REACT_APP_CRICOS_API_USERNAME: ${{ secrets.REACT_APP_CRICOS_API_USERNAME }}
           REACT_APP_CRICOS_API_PASSWORD: ${{ secrets.REACT_APP_CRICOS_API_PASSWORD }}
+          REACT_APP_RTO_MANAGER_URL: ${{ secrets.REACT_APP_RTO_MANAGER_URL }}
+          # React App Environment Variables - Production Mode
+          REACT_APP_PRODUCTION_MODE: ${{ secrets.REACT_APP_PRODUCTION_MODE }}
           # Azure Functions Environment Variables
           LOCAL_EXAMPLE_HTML: "false"
 
