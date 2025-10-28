@@ -174,11 +174,9 @@ const ReviewModal = ({
         { label: 'Torres Strait Islander', value: formatValue(formData.isTorresStraitIslander, 'boolean') },
         { label: 'English Main Language', value: formatValue(formData.isEnglishMainLanguage, 'boolean') },
         ...(formData.isEnglishMainLanguage === 'No' ? [
-          { 
-            label: 'First Language', 
-            value: (formData.languageSpokenAtHome?.includes('Other') || formData.languageSpokenAtHome === 'Multiple languages')
-              ? formatValue(formData.languageSpokenAtHomeOther || formData.languageSpokenAtHome)
-              : formatValue(formData.languageSpokenAtHome)
+          {
+            label: 'First Language',
+            value: formatValue(formData.languageSpokenAtHome)
           }
         ] : []),
         { label: 'English Instruction Language', value: formatValue(formData.wasEnglishInstructionLanguage, 'boolean') },

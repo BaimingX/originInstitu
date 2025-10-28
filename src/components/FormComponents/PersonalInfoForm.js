@@ -46,7 +46,6 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Watch for conditional field dependencies
   const hasPostalAddress = useWatch({ control, name: 'hasPostalAddress' });
   const isEnglishMainLanguage = useWatch({ control, name: 'isEnglishMainLanguage' });
-  const languageSpokenAtHome = useWatch({ control, name: 'languageSpokenAtHome' });
   const hasCompletedEnglishTest = useWatch({ control, name: 'hasCompletedEnglishTest' });
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
@@ -701,6 +700,11 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   };
 
   const validateRequiredFiles = () => {
+    // Skip file validation in non-production mode
+    if (!isProduction) {
+      return [];
+    }
+    
     const missing = [];
     if (!requiredFiles.year12Evidence) missing.push("Evidence of Year 12 or Vocational Education");
     if (!requiredFiles.passport) missing.push("Current Passport");
@@ -1462,23 +1466,11 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                     error={errors.isEnglishMainLanguage}
                   />
                   {isEnglishMainLanguage === 'No' && (
-                    <>
-                      <FormField
-                        field={FORM_FIELDS.languageSpokenAtHome}
-                        register={register}
-                        error={errors.languageSpokenAtHome}
-                      />
-                      {languageSpokenAtHome && (
-                        languageSpokenAtHome.includes('Other') || 
-                        languageSpokenAtHome === 'Multiple languages'
-                      ) && (
-                        <FormField
-                          field={FORM_FIELDS.languageSpokenAtHomeOther}
-                          register={register}
-                          error={errors.languageSpokenAtHomeOther}
-                        />
-                      )}
-                    </>
+                    <FormField
+                      field={FORM_FIELDS.languageSpokenAtHome}
+                      register={register}
+                      error={errors.languageSpokenAtHome}
+                    />
                   )}
                   <FormField
                     field={FORM_FIELDS.wasEnglishInstructionLanguage}
@@ -1892,6 +1884,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                       disabled={isSubmitting || isFileTestLoading}
                     >
                       {isFileTestLoading ? 'Testing...' : 'Test Files'}
+                    </button>
+
+                    {/* API Tester Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowApiTester(true)}
+                      className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+                    >
+                      🧪 API Tester
                     </button>
 
                     {/* View Last Validation Errors Button */}

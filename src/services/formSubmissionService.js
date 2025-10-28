@@ -92,7 +92,17 @@ const getQualificationRecognitionLabel = (value) => {
 };
 
 const getHighestSchoolLevelLabel = (value) => {
-  return value; // Already in full format
+  // Map Value codes to full labels for display
+  const mappings = {
+    '@@': '@@ - Not Specified',
+    '02': '02 - Did not go to school',
+    '08': '08 - Year 8 or below',
+    '09': '09 - Year 9 or equivalent',
+    '10': '10 - Completed Year 10',
+    '11': '11 - Completed Year 11',
+    '12': '12 - Completed Year 12'
+  };
+  return mappings[value] || value;
 };
 
 /**

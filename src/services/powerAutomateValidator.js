@@ -87,9 +87,17 @@ const getQualificationRecognitionLabel = (value) => {
 };
 
 const getHighestSchoolLevelLabel = (value) => {
-  // For highest school level, the values already contain the full description
-  // e.g., '02 - Did not go to school', '12 - Completed Year 12'
-  return value; // Return as is since it's already in full format
+  // Map Value codes to full labels for display
+  const mappings = {
+    '@@': '@@ - Not Specified',
+    '02': '02 - Did not go to school',
+    '08': '08 - Year 8 or below',
+    '09': '09 - Year 9 or equivalent',
+    '10': '10 - Completed Year 10',
+    '11': '11 - Completed Year 11',
+    '12': '12 - Completed Year 12'
+  };
+  return mappings[value] || value;
 };
 
 const POWER_AUTOMATE_CONFIG = {
@@ -341,7 +349,7 @@ export const testWithSampleData = async (flowType = 'student') => {
     isTorresStraitIslander: 'No',
     wasEnglishInstructionLanguage: 'Yes',
     hasCompletedEnglishTest: 'English test',
-    highestSchoolLevel: '02 - Did not go to school',
+    highestSchoolLevel: '02',
     isStillAttendingSchool: 'No',
     hasAchievedQualifications: 'Yes',
     qualificationName: 'Test Qualification',
@@ -445,9 +453,9 @@ export const testValueToLabelConversions = () => {
       passed: false
     },
     highestSchoolLevel: {
-      input: '02 - Did not go to school',
+      input: '02',
       expected: '02 - Did not go to school',
-      actual: getHighestSchoolLevelLabel('02 - Did not go to school'),
+      actual: getHighestSchoolLevelLabel('02'),
       passed: false
     }
   };

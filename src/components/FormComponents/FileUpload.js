@@ -11,6 +11,9 @@ const FileUpload = ({
   englishProficiencyMethod,
   validationErrors = []
 }) => {
+  // Check if running in production mode
+  const isProduction = process.env.NODE_ENV === 'production' ||
+                       process.env.REACT_APP_PRODUCTION_MODE === 'true';
 
   const handleFileUpload = (fileKey, isRequired = true) => (event) => {
     const file = event.target.files[0];
@@ -121,7 +124,7 @@ const FileUpload = ({
   };
 
   const missingFileKeys = getMissingFileKeys();
-  const hasAnyMissingFiles = missingFileKeys.length > 0 && validationErrors.length > 0;
+  const hasAnyMissingFiles = isProduction && missingFileKeys.length > 0 && validationErrors.length > 0;
 
   const optionalFileConfigs = [
     { key: 'cv', label: 'CV' },
@@ -136,7 +139,7 @@ const FileUpload = ({
       {/* Required Files Section */}
       <CollapsibleSection
         title="Required Documents"
-        description="All 4 documents below are mandatory for submission"
+        description={isProduction ? "All 4 documents below are mandatory for submission" : "Documents for submission (optional in test mode)"}
         defaultOpen={true}
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -152,11 +155,11 @@ const FileUpload = ({
             />
           ))}
         </div>
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">
-            <strong>Required:</strong> All 4 documents must be uploaded before submission. Please ensure all documents are:
+        <div className={`mt-4 p-3 rounded-lg ${isProduction ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
+          <p className={`text-sm ${isProduction ? 'text-red-800' : 'text-blue-800'}`}>
+            <strong>{isProduction ? 'Required:' : 'Test Mode:'}</strong> {isProduction ? 'All 4 documents must be uploaded before submission.' : 'Documents are optional in test mode.'} Please ensure all documents are:
           </p>
-          <ul className="text-sm text-red-700 mt-2 ml-4 space-y-1">
+          <ul className={`text-sm mt-2 ml-4 space-y-1 ${isProduction ? 'text-red-700' : 'text-blue-700'}`}>
             <li>• <strong>Color copies only</strong> (black & white copies are not accepted)</li>
             <li>• <strong>Certified translations</strong> if documents are not in English</li>
             <li>• <strong>Combined in a single PDF</strong> with original document copy and certified translation together</li>

@@ -57,6 +57,55 @@ const mapNationality = (nationality, countryOfBirth) => {
 };
 
 /**
+ * Maps qualification level code - returns just the code value for API validation
+ * @param {string} code - Qualification level code from form
+ * @returns {string} Just the code value (e.g., "008")
+ */
+const mapQualificationLevelToText = (code) => {
+  // If it's already a simple code, return as is
+  if (/^[0-9]{3}$/.test(code)) {
+    return code;
+  }
+
+  // Extract code from full format like "008 - Bachelor Degree or Higher Degree Level"
+  if (code && code.includes(' - ')) {
+    return code.split(' - ')[0];
+  }
+
+  // Return as is if not in expected format
+  return code || "";
+};
+
+/**
+ * Processes highest school level selection - returns API-compatible values
+ * @param {string} schoolLevel - School level code from form (e.g., "11", "@@", "02")
+ * @returns {Object} Object with level code (Value only) and year
+ */
+const parseHighSchoolLevel = (schoolLevel) => {
+  if (!schoolLevel) {
+    return { level: "", year: "" };
+  }
+
+  // Map codes to year completed values
+  const yearMap = {
+    '@@': '', // Not Specified - no year
+    '02': '', // Did not go to school - no year
+    '08': '8', // Year 8 or below
+    '09': '9', // Year 9 or equivalent
+    '10': '10', // Completed Year 10
+    '11': '11', // Completed Year 11
+    '12': '12'  // Completed Year 12
+  };
+
+  const year = yearMap[schoolLevel] || "";
+
+  return {
+    level: schoolLevel, // Return the Value directly (e.g., "11", "@@", "02") for API compatibility
+    year: year
+  };
+};
+
+/**
  * Maps form data to required JSON structure
  * @param {Object} formData - Form data from react-hook-form
  * @returns {Object} Mapped JSON object
@@ -90,11 +139,9 @@ export const mapFormDataToJSON = (formData) => {
       VisaType: "Student Visa",
       VisaNumber: "V0000000",
       VisaExpiryDate: "",
-      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' 
-        ? 'English' 
-        : (formData.languageSpokenAtHome?.includes('Other') || formData.languageSpokenAtHome === 'Multiple languages')
-          ? (formData.languageSpokenAtHomeOther || formData.languageSpokenAtHome)
-          : (formData.languageSpokenAtHome || ""),
+      FirstLanguage: formData.isEnglishMainLanguage === 'Yes'
+        ? 'English'
+        : (formData.languageSpokenAtHome || ""),
       HowWellEngSpeak: "",
       StudyReason: "04", // Default value
       CurrentEmployStatus: formData.currentEmploymentStatus || "",
@@ -111,8 +158,8 @@ export const mapFormDataToJSON = (formData) => {
       EngTestWritingScore: formData.writingScore || "",
       EngTestSpeakingScore: formData.speakingScore || "",
       EngTestOverallScore: formData.overallScore || "",
-      HighSchoolLevel: formData.highestSchoolLevel || "",
-      HighSchoolYearCompleted: "",
+      HighSchoolLevel: parseHighSchoolLevel(formData.highestSchoolLevel).level,
+      HighSchoolYearCompleted: parseHighSchoolLevel(formData.highestSchoolLevel).year,
       IsStillAtHighSchool: formData.isStillAttendingSchool === 'Yes',
       SchoolType: "Government", // Default value
       IsDisabled: false, // Default value - would need additional form fields
@@ -155,10 +202,10 @@ export const mapFormDataToJSON = (formData) => {
           return formatDate(finishDate);
         })(),
         ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
-        TuitionFee: 0.0, // Would come from course pricing
-        EnrolmentFee: 0.0, // Would come from course pricing
-        MaterialFee: 0.0, // Would come from course pricing
-        UpfrontFee: 0.0, // Would come from course pricing
+        TuitionFee: 14000,
+        EnrolmentFee: 200,
+        MaterialFee: 1000,
+        UpfrontFee: 300,
         SpecialCondition: "",
         ApplicationRequest: "",
         Status: "Pending"
@@ -223,7 +270,7 @@ export const mapFormDataToJSON = (formData) => {
       InstituteName: formData.institutionName || "",
       InstituteLocation: formData.stateCountry || "",
       YearCompleted: new Date().getFullYear(), // Default to current year
-      EducationLevelCode: formData.qualificationLevel || "",
+      EducationLevelCode: mapQualificationLevelToText(formData.qualificationLevel) || "",
       AchievementRecognitionCode: formData.qualificationRecognition || ""
     });
   }
@@ -288,11 +335,9 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
       VisaType: "Student Visa",
       VisaNumber: "V0000000",
       VisaExpiryDate: "",
-      FirstLanguage: formData.isEnglishMainLanguage === 'Yes' 
-        ? 'English' 
-        : (formData.languageSpokenAtHome?.includes('Other') || formData.languageSpokenAtHome === 'Multiple languages')
-          ? (formData.languageSpokenAtHomeOther || formData.languageSpokenAtHome)
-          : (formData.languageSpokenAtHome || ""),
+      FirstLanguage: formData.isEnglishMainLanguage === 'Yes'
+        ? 'English'
+        : (formData.languageSpokenAtHome || ""),
       HowWellEngSpeak: "",
       StudyReason: "04", // Default value
       CurrentEmployStatus: formData.currentEmploymentStatus || "",
@@ -309,8 +354,8 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
       EngTestWritingScore: formData.writingScore || "",
       EngTestSpeakingScore: formData.speakingScore || "",
       EngTestOverallScore: formData.overallScore || "",
-      HighSchoolLevel: formData.highestSchoolLevel || "",
-      HighSchoolYearCompleted: "",
+      HighSchoolLevel: parseHighSchoolLevel(formData.highestSchoolLevel).level,
+      HighSchoolYearCompleted: parseHighSchoolLevel(formData.highestSchoolLevel).year,
       IsStillAtHighSchool: formData.isStillAttendingSchool === 'Yes',
       SchoolType: "Government", // Default value
       IsDisabled: false, // Default value - would need additional form fields
@@ -350,10 +395,10 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
           return formatDate(finishDate);
         })(),
         ELICOS_NumOfWeeks: 0, // Default - not applicable for this course
-        TuitionFee: 0.0, // Would come from course pricing
-        EnrolmentFee: 0.0, // Would come from course pricing
-        MaterialFee: 0.0, // Would come from course pricing
-        UpfrontFee: 0.0, // Would come from course pricing
+        TuitionFee: 14000,
+        EnrolmentFee: 200,
+        MaterialFee: 1000,
+        UpfrontFee: 300,
         SpecialCondition: "",
         ApplicationRequest: "",
         Status: "Pending"
@@ -421,7 +466,7 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
       InstituteName: formData.institutionName || "",
       InstituteLocation: formData.stateCountry || "",
       YearCompleted: new Date().getFullYear(), // Default to current year
-      EducationLevelCode: formData.qualificationLevel || "",
+      EducationLevelCode: mapQualificationLevelToText(formData.qualificationLevel) || "",
       AchievementRecognitionCode: formData.qualificationRecognition || ""
     });
   }
