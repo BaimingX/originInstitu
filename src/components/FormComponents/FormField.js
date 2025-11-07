@@ -7,9 +7,16 @@ const FormField = ({ field, register, error, customValidation }) => {
 
   const renderInput = () => {
     const validationRule = customValidation || validationRules[name] || {};
+
+    // 为日期字段优化手机端样式
+    const isDateField = type === 'date';
+    const dateClasses = isDateField
+      ? 'w-full px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-sm border rounded-lg focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-colors'
+      : 'w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-colors';
+
     const commonProps = {
       ...register(name, validationRule),
-      className: `w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-colors ${
+      className: `${dateClasses} ${
         error ? 'border-error-red' : 'border-gray-300'
       }`
     };

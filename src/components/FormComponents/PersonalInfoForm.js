@@ -387,6 +387,10 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       setCompletedSteps(prev => new Set([...prev, currentFormStep]));
       if (currentFormStep < 4) {
         goToStep(currentFormStep + 1);
+        // 滚动到页面顶部，提升手机端体验
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 100);
       }
     }
   };
@@ -394,6 +398,10 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const goToPreviousStep = () => {
     if (currentFormStep > 1) {
       goToStep(currentFormStep - 1);
+      // 滚动到页面顶部，提升手机端体验
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -1047,7 +1055,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         </div>
       )}
 
-      <div className={`max-w-4xl mx-auto p-3 sm:p-4 md:p-6 bg-white rounded-lg shadow-lg ${onBackToHome ? 'mt-12 sm:mt-16 md:mt-4' : ''}`}>
+      <div className={`w-full sm:max-w-4xl sm:mx-auto p-2 sm:p-4 md:p-6 bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-lg ${onBackToHome ? 'mt-12 sm:mt-16 md:mt-4' : ''}`}>
         {/* 标题 */}
         <div className="mb-6 md:mb-8">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 text-center">
