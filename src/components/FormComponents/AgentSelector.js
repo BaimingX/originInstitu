@@ -156,14 +156,6 @@ const AgentSelector = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // Format display text for selected agent
-  const getDisplayText = () => {
-    if (selectedAgent) {
-      return `${selectedAgent.name}`;
-    }
-    return placeholder;
-  };
-
   return (
     <div className="agent-selector relative w-full">
       {/* Search Input Field */}
