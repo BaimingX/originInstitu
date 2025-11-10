@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Calendar } from 'lucide-react';
 import { validationRules } from '../../utils/validation';
 
 const FormField = ({ field, register, error, customValidation }) => {
@@ -41,6 +41,41 @@ const FormField = ({ field, register, error, customValidation }) => {
             ))
           )}
         </select>
+      );
+    }
+
+    if (type === 'date') {
+      const dateInputProps = {
+        ...commonProps,
+        className: `${commonProps.className} appearance-none bg-white pr-12 text-gray-900 [color-scheme:light]`
+      };
+
+      const handleDateInteraction = (event) => {
+        // Keep native picker while allowing custom styling
+        if (event.currentTarget.showPicker) {
+          event.currentTarget.showPicker();
+        }
+      };
+
+      return (
+        <div className="relative">
+          <input
+            {...dateInputProps}
+            type="date"
+            placeholder={placeholder || 'Select date'}
+            onClick={(event) => handleDateInteraction(event)}
+            onKeyDown={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                handleDateInteraction(event);
+              }
+            }}
+          />
+          <Calendar
+            size={18}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+        </div>
       );
     }
 

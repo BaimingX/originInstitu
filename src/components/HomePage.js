@@ -188,22 +188,22 @@ const HomePage = ({ onNavigate }) => {
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2 sm:mb-4">
             Choose Your
           </h2>
-          <p className="text-base sm:text-lg md:text-xl text-gray-600">
+          <p className="hidden md:block text-base sm:text-lg md:text-xl text-gray-600">
             Select the option that best describes you
           </p>
         </div>
 
         {/* 按钮容器 */}
         <div
-          className={`w-full max-w-6xl mx-auto transition-all duration-1000 delay-300 ${
+          className={`w-full max-w-6xl mx-auto transition-all duration-1000 delay-300 px-3 sm:px-4 ${
             showButtons ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
           }`}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-16 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-16 max-w-full md:max-w-5xl mx-auto justify-items-stretch">
             {/* Agent卡片 */}
             <div
               onClick={() => onNavigate('agent')}
-              className={`group cursor-pointer bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-16 shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-indigo-200 transform hover:scale-105 active:scale-95 min-h-[380px] sm:min-h-[350px] ${
+              className={`group cursor-pointer bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-16 shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-indigo-200 transform hover:scale-105 active:scale-95 min-h-[380px] sm:min-h-[350px] w-full ${
                 showButtons ? 'animate-fade-in-left' : ''
               }`}
               style={{
@@ -236,7 +236,7 @@ const HomePage = ({ onNavigate }) => {
             {/* Student卡片 */}
             <div
               onClick={() => onNavigate('student-form')}
-              className={`group cursor-pointer bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-16 shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-green-200 transform hover:scale-105 active:scale-95 min-h-[380px] sm:min-h-[350px] ${
+              className={`group cursor-pointer bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-16 shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-green-200 transform hover:scale-105 active:scale-95 min-h-[380px] sm:min-h-[350px] w-full ${
                 showButtons ? 'animate-fade-in-right' : ''
               }`}
               style={{
@@ -270,7 +270,7 @@ const HomePage = ({ onNavigate }) => {
 
         {/* 底部信息 */}
         <div
-          className={`absolute bottom-6 sm:bottom-8 md:bottom-20 left-1/2 transform -translate-x-1/2 text-center transition-all duration-1000 delay-700 px-4 sm:px-6 ${
+          className={`hidden md:block absolute bottom-6 sm:bottom-8 md:bottom-20 left-1/2 transform -translate-x-1/2 text-center transition-all duration-1000 delay-700 px-4 sm:px-6 ${
             showButtons ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
