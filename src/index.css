@@ -16,3 +16,25 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Ensure the custom date inputs match other fields and only show our icon */
+input.custom-date-input {
+  min-height: 2.75rem;
+  padding-block: 0.5rem;
+  line-height: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  input.custom-date-input {
+    min-height: 3rem;
+    padding-block: 0.75rem;
+  }
+}
+
+input.custom-date-input::-webkit-calendar-picker-indicator,
+input.custom-date-input::-webkit-inner-spin-button,
+input.custom-date-input::-webkit-clear-button {
+  opacity: 0;
+  pointer-events: none;
+  display: none;
+}

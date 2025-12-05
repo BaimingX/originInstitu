@@ -46,6 +46,69 @@ const mapGender = (gender) => {
 };
 
 /**
+ * Maps the student origin selection to the API-required value
+ * @param {string} origin - Student origin selected on the form
+ * @returns {string} API-compatible value
+ */
+const mapStudentOrigin = (origin) => {
+  const originMap = {
+    OverseasStudentOffshore: 'OverseasStudent',
+    MainlandChinaStudent: 'OverseasStudent',
+    OverseasStudentInAustralia: 'OverseasStudentInAustralia',
+    ResidentStudent: 'ResidentStudent'
+  };
+
+  return originMap[origin] || 'OverseasStudent';
+};
+
+/**
+ * Maps visa details based on student origin and form inputs
+ * @param {string} origin - Student origin selected on the form
+ * @param {Object} formData - Entire form data
+ * @returns {{type: string, number: string, expiry: string|null}} Visa details
+ */
+const mapVisaDetails = (origin, formData) => {
+  if (origin === 'ResidentStudent') {
+    return { type: '', number: '', expiry: '' };
+  }
+
+  if (origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia') {
+    return {
+      type: 'Student Visa',
+      number: formData.visaNumber || '',
+      expiry: formatDate(formData.visaExpiryDate)
+    };
+  }
+
+  // Mainland China students keep default placeholders
+  return {
+    type: 'Student Visa',
+    number: 'V0000000',
+    expiry: ''
+  };
+};
+
+const isInternationalOrigin = (origin) =>
+  origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia';
+
+const createAddressPayload = (offerId, addressType, fields, isPrimary = false) => ({
+  OfferId: offerId,
+  AddressType: addressType,
+  IsPrimary: isPrimary,
+  BuildingName: fields.building || "",
+  FlatUnitDetail: fields.flatUnit || "",
+  StreetNumber: fields.streetNumber || "",
+  StreetName: fields.streetName || "",
+  Suburb: fields.suburb || "",
+  State: fields.state || "",
+  Postcode: fields.postcode || "",
+  Country: fields.country || "",
+  Phone: "",
+  Fax: "",
+  Mobile: fields.mobile || ""
+});
+
+/**
  * Maps nationality from form input
  * @param {string} nationality - Nationality from form
  * @param {string} countryOfBirth - Country of birth from form (not used in current logic)
@@ -113,6 +176,20 @@ const parseHighSchoolLevel = (schoolLevel) => {
 export const mapFormDataToJSON = (formData) => {
   const offerId = generateOfferId();
   const timestamp = formatDate(new Date());
+  const visaDetails = mapVisaDetails(formData.studentOrigin, formData);
+  const currentAddressFields = {
+    building: formData.buildingPropertyName,
+    flatUnit: formData.flatUnitDetails,
+    streetNumber: formData.streetNumber,
+    streetName: formData.streetName,
+    suburb: formData.cityTownSuburb,
+    state: formData.state,
+    postcode: formData.postcode,
+    country: formData.currentCountry,
+    mobile: formData.mobilePhone
+  };
+  const currentAddress = createAddressPayload(offerId, "Current", currentAddressFields, true);
+  const requiresOverseasAddress = isInternationalOrigin(formData.studentOrigin);
 
   // Base structure
   const mappedData = {
@@ -127,7 +204,7 @@ export const mapFormDataToJSON = (formData) => {
     DoB: formatDate(formData.dateOfBirth),
     Email: formData.email || "",
     Birthplace: formData.birthplace || "",
-    StudentOrigin: "OverseasStudent", // Default for offshore course
+    StudentOrigin: mapStudentOrigin(formData.studentOrigin),
 
     // Compliance and Other Information
     ComplianceAndOtherInfo: {
@@ -136,9 +213,9 @@ export const mapFormDataToJSON = (formData) => {
       Nationality: mapNationality(formData.nationality, formData.countryOfBirth),
       PassportNumber: formData.passportNumber || "",
       PassportExpiryDate: formatDate(formData.passportExpiryDate),
-      VisaType: "Student Visa",
-      VisaNumber: "V0000000",
-      VisaExpiryDate: "",
+      VisaType: visaDetails.type,
+      VisaNumber: visaDetails.number,
+      VisaExpiryDate: visaDetails.expiry,
       FirstLanguage: formData.isEnglishMainLanguage === 'Yes'
         ? 'English'
         : (formData.languageSpokenAtHome || ""),
@@ -168,23 +245,7 @@ export const mapFormDataToJSON = (formData) => {
 
     // Addresses array
     Addresses: [
-      // Current Address
-      {
-        OfferId: offerId,
-        AddressType: "Current",
-        IsPrimary: true,
-        BuildingName: formData.buildingPropertyName || "",
-        FlatUnitDetail: formData.flatUnitDetails || "",
-        StreetNumber: formData.streetNumber || "",
-        StreetName: formData.streetName || "",
-        Suburb: formData.cityTownSuburb || "",
-        State: formData.state || "",
-        Postcode: formData.postcode || "",
-        Country: formData.currentCountry || "",
-        Phone: "",
-        Fax: "",
-        Mobile: formData.mobilePhone || ""
-      }
+      currentAddress
     ],
 
     // Applied Courses array
@@ -244,22 +305,36 @@ export const mapFormDataToJSON = (formData) => {
 
   // Add postal address if different
   if (formData.hasPostalAddress === 'Yes') {
-    mappedData.Addresses.push({
-      OfferId: offerId,
-      AddressType: "Postal",
-      IsPrimary: false,
-      BuildingName: formData.postalBuildingPropertyName || "",
-      FlatUnitDetail: formData.postalFlatUnitDetails || "",
-      StreetNumber: formData.postalStreetNumber || "",
-      StreetName: formData.postalStreetName || "",
-      Suburb: formData.postalCityTownSuburb || "",
-      State: formData.postalState || "",
-      Postcode: formData.postalPostcode || "",
-      Country: formData.postalCountry || "",
-      Phone: "",
-      Fax: "",
-      Mobile: formData.postalMobilePhone || ""
-    });
+    const postalAddressFields = {
+      building: formData.postalBuildingPropertyName,
+      flatUnit: formData.postalFlatUnitDetails,
+      streetNumber: formData.postalStreetNumber,
+      streetName: formData.postalStreetName,
+      suburb: formData.postalCityTownSuburb,
+      state: formData.postalState,
+      postcode: formData.postalPostcode,
+      country: formData.postalCountry,
+      mobile: formData.postalMobilePhone
+    };
+    mappedData.Addresses.push(createAddressPayload(offerId, "Postal", postalAddressFields));
+  }
+
+  if (requiresOverseasAddress) {
+    const overseasAddressFields = formData.hasOverseasAddress === 'Yes'
+      ? {
+          building: formData.overseasBuildingPropertyName,
+          flatUnit: formData.overseasFlatUnitDetails,
+          streetNumber: formData.overseasStreetNumber,
+          streetName: formData.overseasStreetName,
+          suburb: formData.overseasCityTownSuburb,
+          state: formData.overseasState,
+          postcode: formData.overseasPostcode,
+          country: formData.overseasCountry,
+          mobile: formData.overseasMobilePhone
+        }
+      : currentAddressFields;
+
+    mappedData.Addresses.push(createAddressPayload(offerId, "Overseas", overseasAddressFields));
   }
 
   // Add education history if qualifications achieved
@@ -309,6 +384,48 @@ export const validateMappedData = (jsonData) => {
 export const mapFormDataToPowerAutomateJSON = (formData) => {
   const offerId = generateOfferId();
   const timestamp = formatDate(new Date());
+  const visaDetails = mapVisaDetails(formData.studentOrigin, formData);
+  const currentAddressFields = {
+    building: formData.buildingPropertyName,
+    flatUnit: formData.flatUnitDetails,
+    streetNumber: formData.streetNumber,
+    streetName: formData.streetName,
+    suburb: formData.cityTownSuburb,
+    state: formData.state,
+    postcode: formData.postcode,
+    country: formData.currentCountry,
+    mobile: formData.mobilePhone
+  };
+  const currentAddress = createAddressPayload(offerId, "Current", currentAddressFields, true);
+  const postalAddress = formData.hasPostalAddress === 'Yes'
+    ? createAddressPayload(offerId, "Postal", {
+        building: formData.postalBuildingPropertyName,
+        flatUnit: formData.postalFlatUnitDetails,
+        streetNumber: formData.postalStreetNumber,
+        streetName: formData.postalStreetName,
+        suburb: formData.postalCityTownSuburb,
+        state: formData.postalState,
+        postcode: formData.postalPostcode,
+        country: formData.postalCountry,
+        mobile: formData.postalMobilePhone
+      })
+    : null;
+  const requiresOverseasAddress = isInternationalOrigin(formData.studentOrigin);
+  const overseasAddress = requiresOverseasAddress
+    ? createAddressPayload(offerId, "Overseas", formData.hasOverseasAddress === 'Yes'
+        ? {
+            building: formData.overseasBuildingPropertyName,
+            flatUnit: formData.overseasFlatUnitDetails,
+            streetNumber: formData.overseasStreetNumber,
+            streetName: formData.overseasStreetName,
+            suburb: formData.overseasCityTownSuburb,
+            state: formData.overseasState,
+            postcode: formData.overseasPostcode,
+            country: formData.overseasCountry,
+            mobile: formData.overseasMobilePhone
+          }
+        : currentAddressFields)
+    : null;
 
   // Base structure (same as original)
   const mappedData = {
@@ -323,7 +440,7 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
     DoB: formatDate(formData.dateOfBirth),
     Email: formData.email || "",
     Birthplace: formData.birthplace || "",
-    StudentOrigin: "OverseasStudent", // Default for offshore course
+    StudentOrigin: mapStudentOrigin(formData.studentOrigin),
 
     // Compliance and Other Information (same as original)
     ComplianceAndOtherInfo: {
@@ -332,9 +449,9 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
       Nationality: mapNationality(formData.nationality, formData.countryOfBirth),
       PassportNumber: formData.passportNumber || "",
       PassportExpiryDate: formatDate(formData.passportExpiryDate),
-      VisaType: "Student Visa",
-      VisaNumber: "V0000000",
-      VisaExpiryDate: "",
+      VisaType: visaDetails.type,
+      VisaNumber: visaDetails.number,
+      VisaExpiryDate: visaDetails.expiry,
       FirstLanguage: formData.isEnglishMainLanguage === 'Yes'
         ? 'English'
         : (formData.languageSpokenAtHome || ""),
@@ -363,22 +480,7 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
     },
 
     // Flattened Current Address
-    CurrentAddress: {
-      OfferId: offerId,
-      AddressType: "Current",
-      IsPrimary: true,
-      BuildingName: formData.buildingPropertyName || "",
-      FlatUnitDetail: formData.flatUnitDetails || "",
-      StreetNumber: formData.streetNumber || "",
-      StreetName: formData.streetName || "",
-      Suburb: formData.cityTownSuburb || "",
-      State: formData.state || "",
-      Postcode: formData.postcode || "",
-      Country: formData.currentCountry || "",
-      Phone: "",
-      Fax: "",
-      Mobile: formData.mobilePhone || ""
-    },
+    CurrentAddress: currentAddress,
 
     // Applied Courses array (same as original)
     AppliedCourses: [
@@ -435,28 +537,9 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
     }
   };
 
-  // Add postal address if different (flattened)
-  if (formData.hasPostalAddress === 'Yes') {
-    mappedData.PostalAddress = {
-      OfferId: offerId,
-      AddressType: "Postal",
-      IsPrimary: false,
-      BuildingName: formData.postalBuildingPropertyName || "",
-      FlatUnitDetail: formData.postalFlatUnitDetails || "",
-      StreetNumber: formData.postalStreetNumber || "",
-      StreetName: formData.postalStreetName || "",
-      Suburb: formData.postalCityTownSuburb || "",
-      State: formData.postalState || "",
-      Postcode: formData.postalPostcode || "",
-      Country: formData.postalCountry || "",
-      Phone: "",
-      Fax: "",
-      Mobile: formData.postalMobilePhone || ""
-    };
-  } else {
-    // Set PostalAddress to null when not provided
-    mappedData.PostalAddress = null;
-  }
+  // Add postal and overseas addresses in flattened payload
+  mappedData.PostalAddress = postalAddress;
+  mappedData.OverseasAddress = overseasAddress;
 
   // Add education history if qualifications achieved
   if (formData.hasAchievedQualifications === 'Yes') {

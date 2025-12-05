@@ -6,8 +6,15 @@ const validateEnglishAndNumbersOnly = (value) => {
   return englishAndNumbersPattern.test(value) || 'Please use English letters and numbers only';
 };
 
+const requiresVisaDetails = (origin) => {
+  return origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia';
+};
+
 export const validationRules = {
   // Personal Information
+  studentOrigin: {
+    required: 'Please select your student origin'
+  },
   title: {
     required: 'Please select your title'
   },
@@ -88,6 +95,40 @@ export const validationRules = {
     pattern: {
       value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
       message: 'Please enter a valid email address'
+    }
+  },
+  visaNumber: {
+    validate: {
+      requiredForInternational: (value, formValues) => {
+        if (requiresVisaDetails(formValues?.studentOrigin)) {
+          return value?.trim() ? true : 'Please enter your visa number';
+        }
+        return true;
+      },
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  visaExpiryDate: {
+    validate: {
+      requiredForInternational: (value, formValues) => {
+        if (requiresVisaDetails(formValues?.studentOrigin)) {
+          return value ? true : 'Please select your visa expiry date';
+        }
+        return true;
+      },
+      futureDate: (value) => {
+        if (!value) return true;
+
+        const expiryDate = new Date(value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (expiryDate <= today) {
+          return 'Visa expiry date must be in the future';
+        }
+
+        return true;
+      }
     }
   },
   birthplace: {
@@ -193,6 +234,16 @@ export const validationRules = {
   hasPostalAddress: {
     required: 'Please select if you have a different postal address'
   },
+  hasOverseasAddress: {
+    validate: {
+      requiredForInternational: (value, formValues) => {
+        if (!requiresVisaDetails(formValues?.studentOrigin)) {
+          return true;
+        }
+        return value ? true : 'Please select if you have an overseas/permanent address';
+      }
+    }
+  },
 
   // Postal Address (conditional)
   postalCountry: {},
@@ -229,6 +280,47 @@ export const validationRules = {
     }
   },
   postalMobilePhone: {
+    pattern: {
+      value: /^[0-9]+$/,
+      message: 'Please enter a valid mobile phone number (numbers only)'
+    }
+  },
+
+  // Overseas/Permanent Address (conditional)
+  overseasCountry: {},
+  overseasBuildingPropertyName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  overseasFlatUnitDetails: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  overseasStreetNumber: {},
+  overseasStreetName: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  overseasCityTownSuburb: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  overseasState: {
+    validate: {
+      englishOnly: validateEnglishAndNumbersOnly
+    }
+  },
+  overseasPostcode: {
+    pattern: {
+      value: /^[0-9]+$/,
+      message: 'Please enter a valid postcode'
+    }
+  },
+  overseasMobilePhone: {
     pattern: {
       value: /^[0-9]+$/,
       message: 'Please enter a valid mobile phone number (numbers only)'
@@ -492,6 +584,18 @@ export const validationRules = {
 
 export const FORM_FIELDS = {
   // Personal Information Section
+  studentOrigin: {
+    name: 'studentOrigin',
+    label: 'Student Origin',
+    type: 'radio',
+    required: true,
+    options: [
+      { value: 'OverseasStudentOffshore', label: 'Overseas Student (Offshore)', variant: 'ocean' },
+      { value: 'OverseasStudentInAustralia', label: 'Overseas Student in Australia (Onshore)', variant: 'meadow' },
+      { value: 'ResidentStudent', label: 'Resident Student (Domestic)', variant: 'dusk' },
+      { value: 'MainlandChinaStudent', label: 'Mainland China Student', variant: 'sand' }
+    ]
+  },
   title: {
     name: 'title',
     label: 'Title',
@@ -566,6 +670,19 @@ export const FORM_FIELDS = {
     type: 'email',
     required: true,
     placeholder: 'example@email.com'
+  },
+  visaNumber: {
+    name: 'visaNumber',
+    label: 'Visa Number',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter your visa number'
+  },
+  visaExpiryDate: {
+    name: 'visaExpiryDate',
+    label: 'Visa Expiry Date',
+    type: 'date',
+    required: false
   },
   birthplace: {
     name: 'birthplace',
@@ -1473,6 +1590,17 @@ export const FORM_FIELDS = {
       { value: 'Yes', label: 'Yes, I have different postal address.' }
     ]
   },
+  hasOverseasAddress: {
+    name: 'hasOverseasAddress',
+    label: 'Do you have an Overseas/Permanent Address? (if different to your current street address)',
+    type: 'select',
+    required: false,
+    placeholder: 'Please select',
+    options: [
+      { value: 'No', label: 'No, my overseas/permanent address and current address are the same.' },
+      { value: 'Yes', label: 'Yes, I have a different overseas/permanent address.' }
+    ]
+  },
   // Postal Address Section (conditional)
   postalCountry: {
     name: 'postalCountry',
@@ -1800,6 +1928,70 @@ export const FORM_FIELDS = {
   },
   postalMobilePhone: {
     name: 'postalMobilePhone',
+    label: 'Mobile Phone',
+    type: 'tel',
+    required: false,
+    placeholder: 'Enter mobile phone number'
+  },
+  overseasCountry: {
+    name: 'overseasCountry',
+    label: 'Country',
+    type: 'select',
+    required: false,
+    placeholder: 'Please select country',
+    options: []
+  },
+  overseasBuildingPropertyName: {
+    name: 'overseasBuildingPropertyName',
+    label: 'Building/Property Name',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter building or property name (optional)'
+  },
+  overseasFlatUnitDetails: {
+    name: 'overseasFlatUnitDetails',
+    label: 'Flat/Unit Details',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter flat or unit details (optional)'
+  },
+  overseasStreetNumber: {
+    name: 'overseasStreetNumber',
+    label: 'Street Number',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter street number'
+  },
+  overseasStreetName: {
+    name: 'overseasStreetName',
+    label: 'Street Name',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter street name'
+  },
+  overseasCityTownSuburb: {
+    name: 'overseasCityTownSuburb',
+    label: 'City/Town/Suburb',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter city, town or suburb'
+  },
+  overseasState: {
+    name: 'overseasState',
+    label: 'State/Province',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter state or province'
+  },
+  overseasPostcode: {
+    name: 'overseasPostcode',
+    label: 'Postcode',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter postcode'
+  },
+  overseasMobilePhone: {
+    name: 'overseasMobilePhone',
     label: 'Mobile Phone',
     type: 'tel',
     required: false,
@@ -2703,6 +2895,8 @@ export const FORM_FIELDS = {
     description: 'Select your assigned agent from the dynamically loaded list'
   }
 };
+
+FORM_FIELDS.overseasCountry.options = FORM_FIELDS.postalCountry.options;
 
 // Agent Application Form Fields
 export const AGENT_FORM_FIELDS = {

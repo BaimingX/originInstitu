@@ -1,6 +1,9 @@
 import React from 'react';
 import { X, FileText, Edit3, CheckCircle } from 'lucide-react';
 
+const isInternationalOrigin = (origin) =>
+  origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia';
+
 const ReviewModal = ({
   isOpen,
   onClose,
@@ -11,6 +14,7 @@ const ReviewModal = ({
   onEdit
 }) => {
   if (!isOpen) return null;
+  const showOverseasAddress = isInternationalOrigin(formData.studentOrigin);
 
   // 格式化显示值
   const formatValue = (value, fieldType = 'text') => {
@@ -89,6 +93,12 @@ const ReviewModal = ({
         'Employer': 'Employer',
         'Unemployed seeking work': 'Unemployed seeking work',
         'Unemployed not seeking work': 'Unemployed not seeking work'
+      },
+      studentOrigin: {
+        'OverseasStudentOffshore': 'Overseas Student (Offshore)',
+        'OverseasStudentInAustralia': 'Overseas Student in Australia (Onshore)',
+        'ResidentStudent': 'Resident Student (Domestic)',
+        'MainlandChinaStudent': 'Mainland China Student'
       }
     };
 
@@ -101,6 +111,7 @@ const ReviewModal = ({
       title: 'Personal Information',
       icon: <CheckCircle className="w-5 h-5 text-blue-600" />,
       fields: [
+        { label: 'Student Origin', value: formatValue(getOptionLabel('studentOrigin', formData.studentOrigin) || formData.studentOrigin) },
         { label: 'Title', value: formatValue(formData.title) },
         { label: 'First Name', value: formatValue(formData.firstName) },
         { label: 'Middle Name', value: formatValue(formData.middleName) },
@@ -109,6 +120,8 @@ const ReviewModal = ({
         { label: 'Gender', value: formatValue(formData.gender) },
         { label: 'Date of Birth', value: formatValue(formData.dateOfBirth, 'date') },
         { label: 'Email Address', value: formatValue(formData.email) },
+        { label: 'Visa Number', value: formatValue(formData.visaNumber) },
+        { label: 'Visa Expiry Date', value: formatValue(formData.visaExpiryDate, 'date') },
         { label: 'Place of Birth', value: formatValue(formData.birthplace) },
         { label: 'Country of Birth', value: formatValue(formData.countryOfBirth) },
         { label: 'Nationality', value: formatValue(formData.nationality) },
@@ -145,6 +158,21 @@ const ReviewModal = ({
         { label: 'City/Town/Suburb', value: formatValue(formData.postalCityTownSuburb) },
         { label: 'State', value: formatValue(formData.postalState) },
         { label: 'Postcode', value: formatValue(formData.postalPostcode) }
+      ].filter(field => hasValidValue(field.value))
+    }] : []),
+    ...(showOverseasAddress && formData.hasOverseasAddress === 'Yes' ? [{
+      title: 'Overseas/Permanent Address',
+      icon: <CheckCircle className="w-5 h-5 text-cyan-600" />,
+      fields: [
+        { label: 'Country', value: formatValue(formData.overseasCountry) },
+        { label: 'Building/Property Name', value: formatValue(formData.overseasBuildingPropertyName) },
+        { label: 'Flat/Unit Details', value: formatValue(formData.overseasFlatUnitDetails) },
+        { label: 'Street Number', value: formatValue(formData.overseasStreetNumber) },
+        { label: 'Street Name', value: formatValue(formData.overseasStreetName) },
+        { label: 'City/Town/Suburb', value: formatValue(formData.overseasCityTownSuburb) },
+        { label: 'State/Province', value: formatValue(formData.overseasState) },
+        { label: 'Postcode', value: formatValue(formData.overseasPostcode) },
+        { label: 'Mobile Phone', value: formatValue(formData.overseasMobilePhone) }
       ].filter(field => hasValidValue(field.value))
     }] : []),
     {

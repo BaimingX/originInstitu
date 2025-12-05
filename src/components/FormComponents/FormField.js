@@ -47,7 +47,7 @@ const FormField = ({ field, register, error, customValidation }) => {
     if (type === 'date') {
       const dateInputProps = {
         ...commonProps,
-        className: `${commonProps.className} appearance-none bg-white pr-12 text-gray-900 [color-scheme:light]`
+        className: `${commonProps.className} appearance-none bg-white pr-12 text-gray-900 [color-scheme:light] custom-date-input`
       };
 
       const handleDateInteraction = (event) => {
@@ -75,6 +75,32 @@ const FormField = ({ field, register, error, customValidation }) => {
             size={18}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
           />
+        </div>
+      );
+    }
+
+    if (type === 'radio') {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {options?.map((option) => (
+            <label key={option.value} className="cursor-pointer block">
+              <input
+                {...register(name, validationRule)}
+                type="radio"
+                value={option.value}
+                className="sr-only peer"
+              />
+              <div
+                className={`w-full rounded-lg border px-4 py-3 text-sm font-medium text-center transition-all shadow-sm ${
+                  error
+                    ? 'border-error-red bg-red-50 text-error-red'
+                    : 'border-gray-300 bg-white text-gray-700 peer-checked:bg-blue-50 peer-checked:border-primary-blue peer-checked:text-primary-blue'
+                }`}
+              >
+                {option.label}
+              </div>
+            </label>
+          ))}
         </div>
       );
     }

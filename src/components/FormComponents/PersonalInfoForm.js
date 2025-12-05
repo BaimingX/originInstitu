@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { ArrowLeft } from 'lucide-react';
 import { FORM_FIELDS } from '../../utils/validation';
@@ -25,6 +25,9 @@ import ApiTester from '../ApiTester';
 import PowerAutomateValidator from '../PowerAutomateValidator';
 import toast from 'react-hot-toast';
 
+const isInternationalOrigin = (origin) =>
+  origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia';
+
 const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Check if running in production mode
   const isProduction = process.env.NODE_ENV === 'production' ||
@@ -37,7 +40,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     reset,
     control,
     getValues,
-    trigger
+    trigger,
+    setValue
   } = useForm({
     mode: 'onChange', // 启用实时验证
     reValidateMode: 'onChange' // 修复错误后重新验证
@@ -45,11 +49,27 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
   // Watch for conditional field dependencies
   const hasPostalAddress = useWatch({ control, name: 'hasPostalAddress' });
+  const hasOverseasAddress = useWatch({ control, name: 'hasOverseasAddress' });
   const isEnglishMainLanguage = useWatch({ control, name: 'isEnglishMainLanguage' });
   const hasCompletedEnglishTest = useWatch({ control, name: 'hasCompletedEnglishTest' });
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
   const selectedAgent = useWatch({ control, name: 'selectedAgent' });
+  const studentOrigin = useWatch({ control, name: 'studentOrigin' });
+  const isInternationalStudent = isInternationalOrigin(studentOrigin);
+  const shouldShowOverseasAddressQuestion = isInternationalStudent;
+  const previousInternationalStatus = useRef(isInternationalStudent);
+  const resetOverseasAddressFields = useCallback(() => {
+    setValue('overseasCountry', '');
+    setValue('overseasBuildingPropertyName', '');
+    setValue('overseasFlatUnitDetails', '');
+    setValue('overseasStreetNumber', '');
+    setValue('overseasStreetName', '');
+    setValue('overseasCityTownSuburb', '');
+    setValue('overseasState', '');
+    setValue('overseasPostcode', '');
+    setValue('overseasMobilePhone', '');
+  }, [setValue]);
 
   const { isSubmitting, previewJSON, clearStatus } = useFormSubmit();
   const [requiredFiles, setRequiredFiles] = React.useState({
@@ -108,20 +128,59 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Review Modal State
   const [showReviewModal, setShowReviewModal] = useState(false);
 
+  useEffect(() => {
+    if (!isInternationalStudent) {
+      setValue('visaNumber', '');
+      setValue('visaExpiryDate', '');
+    }
+  }, [isInternationalStudent, setValue]);
+
   // Step field mappings using validation.js
-  const stepFields = {
-    1: showAgentSelect
-      ? ['selectedAgent', 'title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate']
-      : ['title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate'],
-    2: ['currentCountry', 'streetNumber', 'streetName', 'cityTownSuburb', 'state', 'postcode', 'mobilePhone', 'contactType', 'relationship', 'contactGivenName', 'contactFamilyName', 'contactEmail', 'contactMobile'],
-    3: ['isAboriginal', 'isTorresStraitIslander', 'isEnglishMainLanguage', 'wasEnglishInstructionLanguage', 'hasCompletedEnglishTest', 'highestSchoolLevel', 'isStillAttendingSchool', 'hasAchievedQualifications', 'currentEmploymentStatus', 'industryOfEmployment', 'occupationIdentifier'],
-    4: ['howDidYouHearAboutUs', 'selectedIntake', 'agreeToTerms']
-  };
+  const stepFields = useMemo(() => {
+    const baseStep1 = showAgentSelect
+      ? ['selectedAgent', 'studentOrigin', 'title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate']
+      : ['studentOrigin', 'title', 'firstName', 'familyName', 'gender', 'dateOfBirth', 'email', 'birthplace', 'countryOfBirth', 'nationality', 'passportNumber', 'passportExpiryDate'];
+
+    const step1Fields = [...baseStep1];
+
+    if (isInternationalStudent) {
+      step1Fields.push('visaNumber', 'visaExpiryDate');
+    }
+
+    const step2Fields = ['currentCountry', 'streetNumber', 'streetName', 'cityTownSuburb', 'state', 'postcode', 'mobilePhone', 'contactType', 'relationship', 'contactGivenName', 'contactFamilyName', 'contactEmail', 'contactMobile', 'hasPostalAddress'];
+
+    if (shouldShowOverseasAddressQuestion) {
+      step2Fields.push('hasOverseasAddress');
+    }
+
+    return {
+      1: step1Fields,
+      2: step2Fields,
+      3: ['isAboriginal', 'isTorresStraitIslander', 'isEnglishMainLanguage', 'wasEnglishInstructionLanguage', 'hasCompletedEnglishTest', 'highestSchoolLevel', 'isStillAttendingSchool', 'hasAchievedQualifications', 'currentEmploymentStatus', 'industryOfEmployment', 'occupationIdentifier'],
+      4: ['howDidYouHearAboutUs', 'selectedIntake', 'agreeToTerms']
+    };
+  }, [showAgentSelect, isInternationalStudent, shouldShowOverseasAddressQuestion]);
 
   // 确保页面加载时滚动到顶部
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useEffect(() => {
+    if (!isInternationalStudent) {
+      setValue('hasOverseasAddress', 'No');
+      resetOverseasAddressFields();
+    } else if (!previousInternationalStatus.current && isInternationalStudent) {
+      setValue('hasOverseasAddress', '');
+    }
+    previousInternationalStatus.current = isInternationalStudent;
+  }, [isInternationalStudent, setValue, resetOverseasAddressFields]);
+
+  useEffect(() => {
+    if (hasOverseasAddress !== 'Yes') {
+      resetOverseasAddressFields();
+    }
+  }, [hasOverseasAddress, resetOverseasAddressFields]);
 
   // 清理localStorage
   const clearStorageProgress = useCallback(() => {
@@ -178,6 +237,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const getFieldDisplayName = (fieldName) => {
     const fieldMap = {
       // Step 1: Personal Information
+      'studentOrigin': 'Student Origin',
       'title': 'Title',
       'firstName': 'First Name',
       'middleName': 'Middle Name',
@@ -186,6 +246,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       'gender': 'Gender',
       'dateOfBirth': 'Date of Birth',
       'email': 'Email Address',
+      'visaNumber': 'Visa Number',
+      'visaExpiryDate': 'Visa Expiry Date',
       'birthplace': 'Place of Birth',
       'countryOfBirth': 'Country of Birth',
       'nationality': 'Nationality',
@@ -212,6 +274,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
       // Postal Address (conditional)
       'postalCountry': 'Postal Country',
+      'hasPostalAddress': 'Postal Address Selection',
+      'hasOverseasAddress': 'Overseas/Permanent Address Selection',
       'postalBuildingPropertyName': 'Postal Building/Property Name',
       'postalFlatUnitDetails': 'Postal Flat/Unit Details',
       'postalStreetNumber': 'Postal Street Number',
@@ -219,6 +283,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       'postalCityTownSuburb': 'Postal City/Town/Suburb',
       'postalState': 'Postal State',
       'postalPostcode': 'Postal Postcode',
+      'overseasCountry': 'Overseas/Permanent Country',
+      'overseasBuildingPropertyName': 'Overseas/Permanent Building/Property Name',
+      'overseasFlatUnitDetails': 'Overseas/Permanent Flat/Unit Details',
+      'overseasStreetNumber': 'Overseas/Permanent Street Number',
+      'overseasStreetName': 'Overseas/Permanent Street Name',
+      'overseasCityTownSuburb': 'Overseas/Permanent City/Town/Suburb',
+      'overseasState': 'Overseas/Permanent State/Province',
+      'overseasPostcode': 'Overseas/Permanent Postcode',
+      'overseasMobilePhone': 'Overseas/Permanent Mobile Phone',
 
       // Step 3: Education and Language
       'isAboriginal': 'Aboriginal Status',
@@ -281,6 +354,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     try {
       // 获取当前表单数据用于条件判断
       const formData = getValues();
+      const requiresOverseasAddress = isInternationalOrigin(formData.studentOrigin);
 
       // 获取当前步骤的基础字段
       let fieldsToValidate = [...(stepFields[stepNumber] || [])];
@@ -292,6 +366,11 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           fieldsToValidate.push('postalCountry', 'postalBuildingPropertyName', 'postalFlatUnitDetails',
                               'postalStreetNumber', 'postalStreetName', 'postalCityTownSuburb',
                               'postalState', 'postalPostcode');
+        }
+        if (requiresOverseasAddress && formData.hasOverseasAddress === 'Yes') {
+          fieldsToValidate.push('overseasCountry', 'overseasBuildingPropertyName', 'overseasFlatUnitDetails',
+                              'overseasStreetNumber', 'overseasStreetName', 'overseasCityTownSuburb',
+                              'overseasState', 'overseasPostcode');
         }
       }
 
@@ -724,6 +803,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Comprehensive pre-submit validation function
   const validateAllRequiredFields = async () => {
     const formData = getValues();
+    const requiresOverseasAddress = isInternationalOrigin(formData.studentOrigin);
     const allRequiredFields = new Set(); // Use Set to avoid duplicates
 
     // Get all base required fields from all steps
@@ -735,6 +815,12 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     if (formData.hasPostalAddress === 'Yes') {
       ['postalCountry', 'postalStreetNumber', 'postalStreetName',
        'postalCityTownSuburb', 'postalState', 'postalPostcode'].forEach(field => {
+        allRequiredFields.add(field);
+      });
+    }
+    if (requiresOverseasAddress && formData.hasOverseasAddress === 'Yes') {
+      ['overseasCountry', 'overseasStreetNumber', 'overseasStreetName',
+       'overseasCityTownSuburb', 'overseasState', 'overseasPostcode'].forEach(field => {
         allRequiredFields.add(field);
       });
     }
@@ -1135,47 +1221,68 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   defaultOpen={true}
                   description="Essential personal details and contact information"
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                  <div className="space-y-4">
                     <FormField
-                      field={FORM_FIELDS.title}
+                      field={FORM_FIELDS.studentOrigin}
                       register={register}
-                      error={errors.title}
+                      error={errors.studentOrigin}
                     />
-                    <FormField
-                      field={FORM_FIELDS.firstName}
-                      register={register}
-                      error={errors.firstName}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.middleName}
-                      register={register}
-                      error={errors.middleName}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.familyName}
-                      register={register}
-                      error={errors.familyName}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.preferredName}
-                      register={register}
-                      error={errors.preferredName}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.gender}
-                      register={register}
-                      error={errors.gender}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.dateOfBirth}
-                      register={register}
-                      error={errors.dateOfBirth}
-                    />
-                    <FormField
-                      field={FORM_FIELDS.email}
-                      register={register}
-                      error={errors.email}
-                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                      <FormField
+                        field={FORM_FIELDS.title}
+                        register={register}
+                        error={errors.title}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.firstName}
+                        register={register}
+                        error={errors.firstName}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.middleName}
+                        register={register}
+                        error={errors.middleName}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.familyName}
+                        register={register}
+                        error={errors.familyName}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.preferredName}
+                        register={register}
+                        error={errors.preferredName}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.gender}
+                        register={register}
+                        error={errors.gender}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.dateOfBirth}
+                        register={register}
+                        error={errors.dateOfBirth}
+                      />
+                      <FormField
+                        field={FORM_FIELDS.email}
+                        register={register}
+                        error={errors.email}
+                      />
+                    </div>
+                    {isInternationalStudent && (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                        <FormField
+                          field={FORM_FIELDS.visaNumber}
+                          register={register}
+                          error={errors.visaNumber}
+                        />
+                        <FormField
+                          field={FORM_FIELDS.visaExpiryDate}
+                          register={register}
+                          error={errors.visaExpiryDate}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CollapsibleSection>
 
@@ -1292,6 +1399,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                     error={errors.hasPostalAddress}
                   />
                 </div>
+                {shouldShowOverseasAddressQuestion && (
+                  <div className="mt-6">
+                    <FormField
+                      field={FORM_FIELDS.hasOverseasAddress}
+                      register={register}
+                      error={errors.hasOverseasAddress}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Postal Address (conditional) */}
@@ -1367,6 +1483,91 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                       error={errors.postalMobilePhone}
                       customValidation={{
                         required: hasPostalAddress === 'Yes' ? 'Please enter mobile phone number' : false,
+                        pattern: {
+                          value: /^[0-9]+$/,
+                          message: 'Please enter a valid mobile phone number (numbers only)'
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Overseas/Permanent Address (conditional) */}
+              {shouldShowOverseasAddressQuestion && hasOverseasAddress === 'Yes' && (
+                <div className="bg-purple-50 p-4 md:p-6 rounded-lg border-2 border-purple-200 mt-6">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">
+                    Overseas/Permanent Address
+                  </h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <FormField
+                      field={FORM_FIELDS.overseasCountry}
+                      register={register}
+                      error={errors.overseasCountry}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please select country' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasBuildingPropertyName}
+                      register={register}
+                      error={errors.overseasBuildingPropertyName}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasFlatUnitDetails}
+                      register={register}
+                      error={errors.overseasFlatUnitDetails}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasStreetNumber}
+                      register={register}
+                      error={errors.overseasStreetNumber}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter street number' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasStreetName}
+                      register={register}
+                      error={errors.overseasStreetName}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter street name' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasCityTownSuburb}
+                      register={register}
+                      error={errors.overseasCityTownSuburb}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter city/town/suburb' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasState}
+                      register={register}
+                      error={errors.overseasState}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter state or province' : false
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasPostcode}
+                      register={register}
+                      error={errors.overseasPostcode}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter postcode' : false,
+                        pattern: {
+                          value: /^[0-9]+$/,
+                          message: 'Please enter a valid postcode'
+                        }
+                      }}
+                    />
+                    <FormField
+                      field={FORM_FIELDS.overseasMobilePhone}
+                      register={register}
+                      error={errors.overseasMobilePhone}
+                      customValidation={{
+                        required: hasOverseasAddress === 'Yes' ? 'Please enter mobile phone number' : false,
                         pattern: {
                           value: /^[0-9]+$/,
                           message: 'Please enter a valid mobile phone number (numbers only)'
