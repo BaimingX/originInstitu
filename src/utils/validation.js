@@ -558,6 +558,11 @@ export const validationRules = {
     }
   },
 
+  // Course Selection
+  selectedCourse: {
+    required: 'Please select your course'
+  },
+
   // Course Intake Selection
   selectedIntake: {
     required: 'Please select your preferred intake date'
@@ -2865,6 +2870,20 @@ export const FORM_FIELDS = {
     type: 'text',
     required: false,
     placeholder: 'Enter languages spoken (optional)'
+  },
+
+  // Course Selection Section
+  selectedCourse: {
+    name: 'selectedCourse',
+    label: 'Course',
+    type: 'select',
+    required: true,
+    placeholder: 'Please select your course',
+    options: [
+      { value: 'CPC30220', label: 'CPC30220: Certificate III in Carpentry' },
+      { value: 'CPC40120', label: 'CPC40120: Certificate IV in Building and Construction' },
+      { value: 'CPC50220', label: 'CPC50220: Diploma of Building and Construction (Building)' }
+    ]
   },
 
   // Course Intake Selection Section

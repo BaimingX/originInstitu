@@ -7,6 +7,13 @@ const API_BASE_URL = process.env.REACT_APP_CRICOS_API_BASE_URL;
 const API_USERNAME = process.env.REACT_APP_CRICOS_API_USERNAME;
 const API_PASSWORD = process.env.REACT_APP_CRICOS_API_PASSWORD;
 
+// Supported course catalog for selection and defaults
+const COURSE_CATALOG = {
+  CPC30220: 'Certificate III in Carpentry',
+  CPC40120: 'Certificate IV in Building and Construction',
+  CPC50220: 'Diploma of Building and Construction (Building)'
+};
+
 /**
  * 获取访问令牌（复用cricosApiService.js的逻辑）
  */
@@ -121,6 +128,7 @@ export const fetchCourseIntakes = async (params = {}) => {
     console.log('✅ 访问令牌获取成功');
 
     const currentYear = new Date().getFullYear();
+    const courseId = params.courseid || params.courseId || 'CPC50220';
     let intakeData = [];
 
     // 策略 1: 精确匹配查询（根据后端数据调整）
@@ -128,7 +136,7 @@ export const fetchCourseIntakes = async (params = {}) => {
     const exactQueryParams = {
       campusid: 1,
       year: currentYear,
-      courseid: 'CPC50220',
+      courseid: courseId,
       coursetype: 'VET',
       targetfor: 'Both'
     };
@@ -148,7 +156,7 @@ export const fetchCourseIntakes = async (params = {}) => {
       const noPublishParams = {
         campusid: 1,
         year: currentYear,
-        courseid: 'CPC50220',
+        courseid: courseId,
         coursetype: 'VET'
       };
 
@@ -226,7 +234,7 @@ export const fetchCourseIntakes = async (params = {}) => {
         const nextYearParams = {
           campusid: 1,
           year: currentYear + 1,
-          courseid: 'CPC50220',
+          courseid: courseId,
           coursetype: 'VET'
         };
 
@@ -250,11 +258,12 @@ export const fetchCourseIntakes = async (params = {}) => {
         const intakeDate = new Date(intake.IntakeDate);
         const isFuture = intakeDate >= today;
         const isPublished = intake.IsPublished;
+        const matchesCourse = !courseId || intake.CourseId === courseId;
 
         console.log(`📅 检查入学日期: ${intake.IntakeDate}, 未来: ${isFuture}, 已发布: ${isPublished}, 课程: ${intake.CourseId}, 校区: ${intake.CampusId}`);
 
         // 优先显示已发布的未来日期，如果没有已发布的，则显示所有未来日期
-        return isFuture; // 暂时不强制要求发布状态
+        return isFuture && matchesCourse; // 暂时不强制要求发布状态
       })
       .map(intake => ({
         ...intake,
@@ -289,62 +298,63 @@ export const fetchCourseIntakes = async (params = {}) => {
 /**
  * 获取默认的入学日期选项（用于离线或错误情况）
  */
-export const getDefaultIntakeOptions = () => {
+export const getDefaultIntakeOptions = (courseId = 'CPC50220') => {
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
   const today = new Date();
+  const courseName = COURSE_CATALOG[courseId] || COURSE_CATALOG.CPC50220;
 
   const options = [
     // 当前年份的入学日期
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: currentYear,
       IntakeDate: `${currentYear}-01-13T00:00:00+11:00`,
       formattedDate: `January 13, ${currentYear}`,
-      displayText: `January 13, ${currentYear} - Diploma of Building and Construction (Building)`,
+      displayText: `January 13, ${currentYear} - ${courseName}`,
       value: `${currentYear}-01-13T00:00:00+11:00`,
       IsPublished: true
     },
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: currentYear,
       IntakeDate: `${currentYear}-04-08T00:00:00+11:00`,
       formattedDate: `April 8, ${currentYear}`,
-      displayText: `April 8, ${currentYear} - Diploma of Building and Construction (Building)`,
+      displayText: `April 8, ${currentYear} - ${courseName}`,
       value: `${currentYear}-04-08T00:00:00+11:00`,
       IsPublished: true
     },
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: currentYear,
       IntakeDate: `${currentYear}-08-04T00:00:00+11:00`,
       formattedDate: `August 4, ${currentYear}`,
-      displayText: `August 4, ${currentYear} - Diploma of Building and Construction (Building)`,
+      displayText: `August 4, ${currentYear} - ${courseName}`,
       value: `${currentYear}-08-04T00:00:00+11:00`,
       IsPublished: true
     },
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: currentYear,
       IntakeDate: `${currentYear}-11-17T00:00:00+11:00`,
       formattedDate: `November 17, ${currentYear}`,
-      displayText: `November 17, ${currentYear} - Diploma of Building and Construction (Building)`,
+      displayText: `November 17, ${currentYear} - ${courseName}`,
       value: `${currentYear}-11-17T00:00:00+11:00`,
       IsPublished: true
     },
@@ -352,26 +362,26 @@ export const getDefaultIntakeOptions = () => {
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: nextYear,
       IntakeDate: `${nextYear}-01-13T00:00:00+11:00`,
       formattedDate: `January 13, ${nextYear}`,
-      displayText: `January 13, ${nextYear} - Diploma of Building and Construction (Building)`,
+      displayText: `January 13, ${nextYear} - ${courseName}`,
       value: `${nextYear}-01-13T00:00:00+11:00`,
       IsPublished: true
     },
     {
       CampusId: 1,
       CampusName: "Main Campus",
-      CourseId: "CPC50220",
-      CourseName: "Diploma of Building and Construction (Building)",
+      CourseId: courseId,
+      CourseName: courseName,
       CourseType: "VET",
       IntakeYear: nextYear,
       IntakeDate: `${nextYear}-04-08T00:00:00+11:00`,
       formattedDate: `April 8, ${nextYear}`,
-      displayText: `April 8, ${nextYear} - Diploma of Building and Construction (Building)`,
+      displayText: `April 8, ${nextYear} - ${courseName}`,
       value: `${nextYear}-04-08T00:00:00+11:00`,
       IsPublished: true
     }

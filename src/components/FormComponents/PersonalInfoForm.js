@@ -44,7 +44,10 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     setValue
   } = useForm({
     mode: 'onChange', // 启用实时验证
-    reValidateMode: 'onChange' // 修复错误后重新验证
+    reValidateMode: 'onChange', // 修复错误后重新验证
+    defaultValues: {
+      selectedCourse: 'CPC50220'
+    }
   });
 
   // Watch for conditional field dependencies
@@ -55,10 +58,12 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
   const selectedAgent = useWatch({ control, name: 'selectedAgent' });
+  const selectedCourse = useWatch({ control, name: 'selectedCourse' });
   const studentOrigin = useWatch({ control, name: 'studentOrigin' });
   const isInternationalStudent = isInternationalOrigin(studentOrigin);
   const shouldShowOverseasAddressQuestion = isInternationalStudent;
   const previousInternationalStatus = useRef(isInternationalStudent);
+  const previousSelectedCourseRef = useRef(null);
   const resetOverseasAddressFields = useCallback(() => {
     setValue('overseasCountry', '');
     setValue('overseasBuildingPropertyName', '');
@@ -157,7 +162,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       1: step1Fields,
       2: step2Fields,
       3: ['isAboriginal', 'isTorresStraitIslander', 'isEnglishMainLanguage', 'wasEnglishInstructionLanguage', 'hasCompletedEnglishTest', 'highestSchoolLevel', 'isStillAttendingSchool', 'hasAchievedQualifications', 'currentEmploymentStatus', 'industryOfEmployment', 'occupationIdentifier'],
-      4: ['howDidYouHearAboutUs', 'selectedIntake', 'agreeToTerms']
+      4: ['howDidYouHearAboutUs', 'selectedCourse', 'selectedIntake', 'agreeToTerms']
     };
   }, [showAgentSelect, isInternationalStudent, shouldShowOverseasAddressQuestion]);
 
@@ -320,6 +325,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
       // Step 4: Course and Documents
       'howDidYouHearAboutUs': 'How Did You Hear About Us',
+      'selectedCourse': 'Course Selection',
       'selectedIntake': 'Course Intake Selection',
       'agreeToTerms': 'Terms and Conditions Agreement',
 
@@ -574,6 +580,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
   // 加载课程入学日期数据
   useEffect(() => {
+    const courseId = selectedCourse || 'CPC50220';
     const loadCourseIntakes = async () => {
       setIsLoadingIntakes(true);
       setIntakeError(null);
@@ -581,7 +588,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       try {
         console.log('🗓️ 开始加载课程入学日期...');
 
-        const result = await fetchCourseIntakes();
+        const result = await fetchCourseIntakes({ courseid: courseId });
 
         if (result.success && result.data.length > 0) {
           setIntakeOptions(result.data);
@@ -589,7 +596,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         } else {
           // 使用默认选项
           console.warn('⚠️ 未找到课程入学日期，使用默认选项');
-          setIntakeOptions(getDefaultIntakeOptions());
+          setIntakeOptions(getDefaultIntakeOptions(courseId));
           setIntakeError('无法获取最新的入学日期，显示默认选项');
           toast.error('无法获取最新入学日期，使用默认选项', {
             duration: 4000,
@@ -598,7 +605,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         }
       } catch (error) {
         console.error('❌ 加载课程入学日期失败:', error);
-        setIntakeOptions(getDefaultIntakeOptions());
+        setIntakeOptions(getDefaultIntakeOptions(courseId));
         setIntakeError(`获取入学日期失败: ${error.message}`);
         toast.error('获取入学日期失败，使用默认选项', {
           duration: 5000,
@@ -609,8 +616,13 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       }
     };
 
+    if (previousSelectedCourseRef.current && previousSelectedCourseRef.current !== courseId) {
+      setValue('selectedIntake', '');
+    }
+    previousSelectedCourseRef.current = courseId;
+
     loadCourseIntakes();
-  }, []);
+  }, [selectedCourse, setValue]);
 
   // 创建动态的Employment Status字段配置
   const currentEmploymentStatusField = {
@@ -1990,6 +2002,12 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
                 <div className="space-y-4">
                   <FormField
+                    field={FORM_FIELDS.selectedCourse}
+                    register={register}
+                    error={errors.selectedCourse}
+                  />
+
+                  <FormField
                     field={selectedIntakeField}
                     register={register}
                     error={errors.selectedIntake}
@@ -1998,7 +2016,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   {/* Information note */}
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      <strong>Note:</strong> Please select your preferred course intake date. This will be your intended start date for the Certificate V in Construction Management course.
+                      <strong>Note:</strong> Please select your preferred course intake date. This will be your intended start date for the selected course.
                       {isLoadingIntakes && (
                         <span className="ml-2 text-blue-600">Loading available dates...</span>
                       )}

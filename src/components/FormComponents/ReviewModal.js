@@ -99,6 +99,11 @@ const ReviewModal = ({
         'OverseasStudentInAustralia': 'Overseas Student in Australia (Onshore)',
         'ResidentStudent': 'Resident Student (Domestic)',
         'MainlandChinaStudent': 'Mainland China Student'
+      },
+      selectedCourse: {
+        'CPC30220': 'CPC30220: Certificate III in Carpentry',
+        'CPC40120': 'CPC40120: Certificate IV in Building and Construction',
+        'CPC50220': 'CPC50220: Diploma of Building and Construction (Building)'
       }
     };
 
@@ -252,6 +257,7 @@ const ReviewModal = ({
         const fields = [
           { label: 'How Did You Hear About Us', value: formatValue(formData.howDidYouHearAboutUs) },
           { label: 'Details', value: formatValue(formData.howDidYouHearDetails) },
+          { label: 'Selected Course', value: formatValue(getOptionLabel('selectedCourse', formData.selectedCourse)) },
           { label: 'Selected Course Intake', value: formatValue(formData.selectedIntake) }
         ];
 

@@ -252,7 +252,7 @@ export const mapFormDataToJSON = (formData) => {
     AppliedCourses: [
       {
         OfferId: offerId,
-        CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
+        CourseId: formData.selectedCourse || "CPC50220", // Use user selected course when available
         CampusId: 1, // Default campus
         IntakeDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
         StartDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
@@ -486,7 +486,7 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
     AppliedCourses: [
       {
         OfferId: offerId,
-        CourseId: "CPC50220", // Default to Diploma course mentioned in PDF
+        CourseId: formData.selectedCourse || "CPC50220", // Use user selected course when available
         CampusId: 1, // Default campus
         IntakeDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
         StartDate: formData.selectedIntake || formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // Use user selected intake date
