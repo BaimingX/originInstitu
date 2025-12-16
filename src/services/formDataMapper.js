@@ -69,7 +69,11 @@ const mapStudentOrigin = (origin) => {
  */
 const mapVisaDetails = (origin, formData) => {
   if (origin === 'ResidentStudent') {
-    return { type: '', number: '', expiry: '' };
+    return {
+      type: formData.visaResidentName || '',
+      number: '',
+      expiry: ''
+    };
   }
 
   if (origin === 'OverseasStudentOffshore' || origin === 'OverseasStudentInAustralia') {
@@ -228,13 +232,13 @@ export const mapFormDataToJSON = (formData) => {
       IsAboriginal: formData.isAboriginal === 'Yes',
       IsTorresStraitIslander: formData.isTorresStraitIslander === 'Yes',
       IsEngLanguageInClass: formData.wasEnglishInstructionLanguage === 'Yes',
-      EngTestType: formData.englishTestType || "",
-      EngTestDate: formatDate(formData.engTestDate) || null,
-      EngTestListeningScore: formData.listeningScore || "",
-      EngTestReadingScore: formData.readingScore || "",
-      EngTestWritingScore: formData.writingScore || "",
-      EngTestSpeakingScore: formData.speakingScore || "",
-      EngTestOverallScore: formData.overallScore || "",
+      EngTestType: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "Other" : (formData.englishTestType || ""),
+      EngTestDate: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? null : (formatDate(formData.engTestDate) || null),
+      EngTestListeningScore: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "" : (formData.listeningScore || ""),
+      EngTestReadingScore: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "" : (formData.readingScore || ""),
+      EngTestWritingScore: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "" : (formData.writingScore || ""),
+      EngTestSpeakingScore: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "" : (formData.speakingScore || ""),
+      EngTestOverallScore: (formData.hasCompletedEnglishTest === 'ELICOS Training' || formData.hasCompletedEnglishTest === 'Other') ? "" : (formData.overallScore || ""),
       HighSchoolLevel: parseHighSchoolLevel(formData.highestSchoolLevel).level,
       HighSchoolYearCompleted: parseHighSchoolLevel(formData.highestSchoolLevel).year,
       IsStillAtHighSchool: formData.isStillAttendingSchool === 'Yes',
@@ -322,16 +326,16 @@ export const mapFormDataToJSON = (formData) => {
   if (requiresOverseasAddress) {
     const overseasAddressFields = formData.hasOverseasAddress === 'Yes'
       ? {
-          building: formData.overseasBuildingPropertyName,
-          flatUnit: formData.overseasFlatUnitDetails,
-          streetNumber: formData.overseasStreetNumber,
-          streetName: formData.overseasStreetName,
-          suburb: formData.overseasCityTownSuburb,
-          state: formData.overseasState,
-          postcode: formData.overseasPostcode,
-          country: formData.overseasCountry,
-          mobile: formData.overseasMobilePhone
-        }
+        building: formData.overseasBuildingPropertyName,
+        flatUnit: formData.overseasFlatUnitDetails,
+        streetNumber: formData.overseasStreetNumber,
+        streetName: formData.overseasStreetName,
+        suburb: formData.overseasCityTownSuburb,
+        state: formData.overseasState,
+        postcode: formData.overseasPostcode,
+        country: formData.overseasCountry,
+        mobile: formData.overseasMobilePhone
+      }
       : currentAddressFields;
 
     mappedData.Addresses.push(createAddressPayload(offerId, "Overseas", overseasAddressFields));
@@ -368,7 +372,10 @@ export const validateMappedData = (jsonData) => {
   if (!jsonData.DoB) errors.push('Date of Birth is required');
   if (!jsonData.ComplianceAndOtherInfo.CountryBirth) errors.push('Country of Birth is required');
   if (!jsonData.ComplianceAndOtherInfo.Nationality) errors.push('Nationality is required');
-  if (!jsonData.ComplianceAndOtherInfo.PassportNumber) errors.push('Passport Number is required');
+  // Passport Number is optional for Resident Students
+  if (jsonData.StudentOrigin !== 'ResidentStudent' && !jsonData.ComplianceAndOtherInfo.PassportNumber) {
+    errors.push('Passport Number is required');
+  }
 
   return {
     isValid: errors.length === 0,
@@ -399,32 +406,32 @@ export const mapFormDataToPowerAutomateJSON = (formData) => {
   const currentAddress = createAddressPayload(offerId, "Current", currentAddressFields, true);
   const postalAddress = formData.hasPostalAddress === 'Yes'
     ? createAddressPayload(offerId, "Postal", {
-        building: formData.postalBuildingPropertyName,
-        flatUnit: formData.postalFlatUnitDetails,
-        streetNumber: formData.postalStreetNumber,
-        streetName: formData.postalStreetName,
-        suburb: formData.postalCityTownSuburb,
-        state: formData.postalState,
-        postcode: formData.postalPostcode,
-        country: formData.postalCountry,
-        mobile: formData.postalMobilePhone
-      })
+      building: formData.postalBuildingPropertyName,
+      flatUnit: formData.postalFlatUnitDetails,
+      streetNumber: formData.postalStreetNumber,
+      streetName: formData.postalStreetName,
+      suburb: formData.postalCityTownSuburb,
+      state: formData.postalState,
+      postcode: formData.postalPostcode,
+      country: formData.postalCountry,
+      mobile: formData.postalMobilePhone
+    })
     : null;
   const requiresOverseasAddress = isInternationalOrigin(formData.studentOrigin);
   const overseasAddress = requiresOverseasAddress
     ? createAddressPayload(offerId, "Overseas", formData.hasOverseasAddress === 'Yes'
-        ? {
-            building: formData.overseasBuildingPropertyName,
-            flatUnit: formData.overseasFlatUnitDetails,
-            streetNumber: formData.overseasStreetNumber,
-            streetName: formData.overseasStreetName,
-            suburb: formData.overseasCityTownSuburb,
-            state: formData.overseasState,
-            postcode: formData.overseasPostcode,
-            country: formData.overseasCountry,
-            mobile: formData.overseasMobilePhone
-          }
-        : currentAddressFields)
+      ? {
+        building: formData.overseasBuildingPropertyName,
+        flatUnit: formData.overseasFlatUnitDetails,
+        streetNumber: formData.overseasStreetNumber,
+        streetName: formData.overseasStreetName,
+        suburb: formData.overseasCityTownSuburb,
+        state: formData.overseasState,
+        postcode: formData.overseasPostcode,
+        country: formData.overseasCountry,
+        mobile: formData.overseasMobilePhone
+      }
+      : currentAddressFields)
     : null;
 
   // Base structure (same as original)

@@ -179,6 +179,9 @@ export const validationRules = {
     }
   },
 
+  visaResidentName: {
+    required: 'Please select your visa type'
+  },
   // Current Address
   currentCountry: {
     required: 'Please select your country'
@@ -599,6 +602,21 @@ export const FORM_FIELDS = {
       { value: 'OverseasStudentInAustralia', label: 'Overseas Student in Australia (Onshore)', variant: 'meadow' },
       { value: 'ResidentStudent', label: 'Resident Student (Domestic)', variant: 'dusk' },
       { value: 'MainlandChinaStudent', label: 'Mainland China Student', variant: 'sand' }
+    ]
+  },
+  visaResidentName: {
+    name: 'visaResidentName',
+    label: 'Visa Type',
+    type: 'select',
+    required: true,
+    placeholder: 'Please select your resident visa type',
+    options: [
+      { value: 'Australian Citizen', label: 'Australian Citizen' },
+      { value: 'Business Migration Visa', label: 'Business Migration Visa' },
+      { value: 'Graduate 485', label: 'Graduate 485' },
+      { value: 'New Zealand Citizen', label: 'New Zealand Citizen' },
+      { value: 'Permanent Resident', label: 'Permanent Resident' },
+      { value: 'Sponsorship Visa', label: 'Sponsorship Visa' }
     ]
   },
   title: {
@@ -2516,7 +2534,8 @@ export const FORM_FIELDS = {
     placeholder: 'Please select',
     options: [
       { value: 'English test', label: 'English test' },
-      { value: 'ELICOS Training', label: 'ELICOS Training' }
+      { value: 'ELICOS Training', label: 'ELICOS Training' },
+      { value: 'Other', label: 'Other' }
     ]
   },
   // English Test Section (conditional)

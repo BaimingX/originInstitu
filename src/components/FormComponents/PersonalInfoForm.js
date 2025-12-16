@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { ArrowLeft } from 'lucide-react';
-import { FORM_FIELDS } from '../../utils/validation';
+import { FORM_FIELDS, validationRules } from '../../utils/validation';
 import FormField from './FormField';
 import FileUpload from './FileUpload';
 import CollapsibleSection from './CollapsibleSection';
@@ -31,7 +31,7 @@ const isInternationalOrigin = (origin) =>
 const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   // Check if running in production mode
   const isProduction = process.env.NODE_ENV === 'production' ||
-                       process.env.REACT_APP_PRODUCTION_MODE === 'true';
+    process.env.REACT_APP_PRODUCTION_MODE === 'true';
 
   const {
     register,
@@ -57,10 +57,13 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const hasCompletedEnglishTest = useWatch({ control, name: 'hasCompletedEnglishTest' });
   const hasAchievedQualifications = useWatch({ control, name: 'hasAchievedQualifications' });
   const howDidYouHearAboutUs = useWatch({ control, name: 'howDidYouHearAboutUs' });
+
   const selectedAgent = useWatch({ control, name: 'selectedAgent' });
+  const visaResidentName = useWatch({ control, name: 'visaResidentName' });
   const selectedCourse = useWatch({ control, name: 'selectedCourse' });
   const studentOrigin = useWatch({ control, name: 'studentOrigin' });
   const isInternationalStudent = isInternationalOrigin(studentOrigin);
+  const isResidentStudent = studentOrigin === 'ResidentStudent';
   const shouldShowOverseasAddressQuestion = isInternationalStudent;
   const previousInternationalStatus = useRef(isInternationalStudent);
   const previousSelectedCourseRef = useRef(null);
@@ -81,7 +84,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     year12Evidence: null,
     passport: null,
     englishTest: null,
-    academicQualifications: null
+    academicQualifications: null,
+    visaDocument: null // Added for Resident Students (Group B)
   });
   const [optionalFiles, setOptionalFiles] = React.useState({
     cv: null,
@@ -150,6 +154,10 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
     if (isInternationalStudent) {
       step1Fields.push('visaNumber', 'visaExpiryDate');
+    }
+
+    if (isResidentStudent) {
+      step1Fields.push('visaResidentName');
     }
 
     const step2Fields = ['currentCountry', 'streetNumber', 'streetName', 'cityTownSuburb', 'state', 'postcode', 'mobilePhone', 'contactType', 'relationship', 'contactGivenName', 'contactFamilyName', 'contactEmail', 'contactMobile', 'hasPostalAddress'];
@@ -341,9 +349,9 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     if (errors.length > 0) {
       const firstErrorField = errors[0];
       const element = document.querySelector(`[name="${firstErrorField}"]`) ||
-                    document.querySelector(`input[name="${firstErrorField}"]`) ||
-                    document.querySelector(`select[name="${firstErrorField}"]`) ||
-                    document.querySelector(`textarea[name="${firstErrorField}"]`);
+        document.querySelector(`input[name="${firstErrorField}"]`) ||
+        document.querySelector(`select[name="${firstErrorField}"]`) ||
+        document.querySelector(`textarea[name="${firstErrorField}"]`);
 
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -370,13 +378,13 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         // Postal Address条件验证
         if (formData.hasPostalAddress === 'Yes') {
           fieldsToValidate.push('postalCountry', 'postalBuildingPropertyName', 'postalFlatUnitDetails',
-                              'postalStreetNumber', 'postalStreetName', 'postalCityTownSuburb',
-                              'postalState', 'postalPostcode');
+            'postalStreetNumber', 'postalStreetName', 'postalCityTownSuburb',
+            'postalState', 'postalPostcode');
         }
         if (requiresOverseasAddress && formData.hasOverseasAddress === 'Yes') {
           fieldsToValidate.push('overseasCountry', 'overseasBuildingPropertyName', 'overseasFlatUnitDetails',
-                              'overseasStreetNumber', 'overseasStreetName', 'overseasCityTownSuburb',
-                              'overseasState', 'overseasPostcode');
+            'overseasStreetNumber', 'overseasStreetName', 'overseasCityTownSuburb',
+            'overseasState', 'overseasPostcode');
         }
       }
 
@@ -384,13 +392,13 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
         // 教育资格条件验证
         if (formData.hasAchievedQualifications === 'Yes') {
           fieldsToValidate.push('qualificationLevel', 'qualificationName',
-                              'qualificationRecognition', 'institutionName', 'stateCountry');
+            'qualificationRecognition', 'institutionName', 'stateCountry');
         }
 
         // English Test条件验证
         if (formData.hasCompletedEnglishTest === 'English test') {
           fieldsToValidate.push('englishTestType', 'listeningScore', 'readingScore',
-                              'writingScore', 'speakingScore', 'overallScore', 'engTestDate');
+            'writingScore', 'speakingScore', 'overallScore', 'engTestDate');
         }
       }
 
@@ -803,12 +811,33 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     if (!isProduction) {
       return [];
     }
-    
+
     const missing = [];
-    if (!requiredFiles.year12Evidence) missing.push("Evidence of Year 12 or Vocational Education");
-    if (!requiredFiles.passport) missing.push("Current Passport");
-    if (!requiredFiles.englishTest) missing.push("English Test Results");
-    if (!requiredFiles.academicQualifications) missing.push("Academic Qualifications & Transcripts");
+
+    // Logic for Resident Students
+    if (isResidentStudent) {
+      // Group A Visa Types (Single Document)
+      const groupAVisas = ['Australian Citizen', 'Business Migration Visa', 'New Zealand Citizen'];
+
+      // For residents, we use the 'passport' slot for "Proof of Identity"
+      if (!requiredFiles.passport) {
+        missing.push("Proof of Identity (Passport, Medicare, or Centrelink Card)");
+      }
+
+      // Group B Visa Types (Two Documents) - require generic visa document
+      if (visaResidentName && !groupAVisas.includes(visaResidentName)) {
+        if (!requiredFiles.visaDocument) {
+          missing.push("Visa (Vevo Check completed within 2 days)");
+        }
+      }
+    } else {
+      // For International Students
+      if (!requiredFiles.year12Evidence) missing.push("Evidence of Year 12 or Vocational Education");
+      if (!requiredFiles.passport) missing.push("Current Passport");
+      if (!requiredFiles.englishTest) missing.push("English Test Results");
+      if (!requiredFiles.academicQualifications) missing.push("Academic Qualifications & Transcripts");
+    }
+
     return missing;
   };
 
@@ -826,15 +855,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
     // Add conditional fields based on user selections
     if (formData.hasPostalAddress === 'Yes') {
       ['postalCountry', 'postalStreetNumber', 'postalStreetName',
-       'postalCityTownSuburb', 'postalState', 'postalPostcode'].forEach(field => {
-        allRequiredFields.add(field);
-      });
+        'postalCityTownSuburb', 'postalState', 'postalPostcode'].forEach(field => {
+          allRequiredFields.add(field);
+        });
     }
     if (requiresOverseasAddress && formData.hasOverseasAddress === 'Yes') {
       ['overseasCountry', 'overseasStreetNumber', 'overseasStreetName',
-       'overseasCityTownSuburb', 'overseasState', 'overseasPostcode'].forEach(field => {
-        allRequiredFields.add(field);
-      });
+        'overseasCityTownSuburb', 'overseasState', 'overseasPostcode'].forEach(field => {
+          allRequiredFields.add(field);
+        });
     }
 
     // Agent selection - only add if not already in stepFields and condition is met
@@ -845,16 +874,16 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
 
     if (formData.hasCompletedEnglishTest === 'English test') {
       ['englishTestType', 'listeningScore', 'readingScore',
-       'writingScore', 'speakingScore', 'overallScore', 'engTestDate'].forEach(field => {
-        allRequiredFields.add(field);
-      });
+        'writingScore', 'speakingScore', 'overallScore', 'engTestDate'].forEach(field => {
+          allRequiredFields.add(field);
+        });
     }
 
     if (formData.hasAchievedQualifications === 'Yes') {
       ['qualificationLevel', 'qualificationName', 'qualificationRecognition',
-       'institutionName', 'stateCountry'].forEach(field => {
-        allRequiredFields.add(field);
-      });
+        'institutionName', 'stateCountry'].forEach(field => {
+          allRequiredFields.add(field);
+        });
     }
 
     // Convert Set back to Array for validation
@@ -1239,6 +1268,9 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                       register={register}
                       error={errors.studentOrigin}
                     />
+
+
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                       <FormField
                         field={FORM_FIELDS.title}
@@ -1281,6 +1313,17 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                         error={errors.email}
                       />
                     </div>
+
+                    {/* Resident Visa Type Selection */}
+                    {isResidentStudent && (
+                      <div className="animate-fade-in-down mt-4">
+                        <FormField
+                          field={FORM_FIELDS.visaResidentName}
+                          register={register}
+                          error={errors.visaResidentName}
+                        />
+                      </div>
+                    )}
                     {isInternationalStudent && (
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                         <FormField
@@ -1331,14 +1374,28 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                     <FormField
-                      field={FORM_FIELDS.passportNumber}
+                      field={{
+                        ...FORM_FIELDS.passportNumber,
+                        required: !isResidentStudent
+                      }}
                       register={register}
                       error={errors.passportNumber}
+                      customValidation={isResidentStudent ? {
+                        required: false,
+                        validate: validationRules.passportNumber.validate
+                      } : undefined}
                     />
                     <FormField
-                      field={FORM_FIELDS.passportExpiryDate}
+                      field={{
+                        ...FORM_FIELDS.passportExpiryDate,
+                        required: !isResidentStudent
+                      }}
                       register={register}
                       error={errors.passportExpiryDate}
+                      customValidation={isResidentStudent ? {
+                        required: false,
+                        validate: validationRules.passportExpiryDate.validate
+                      } : undefined}
                     />
                     <FormField
                       field={FORM_FIELDS.usi}
@@ -2066,6 +2123,8 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                   setOptionalFiles={setOptionalFiles}
                   englishProficiencyMethod={hasCompletedEnglishTest}
                   validationErrors={fileValidationErrors}
+                  studentOrigin={studentOrigin}
+                  visaResidentName={visaResidentName}
                 />
               </div>
 

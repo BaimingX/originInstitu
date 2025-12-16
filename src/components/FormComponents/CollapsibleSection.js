@@ -45,11 +45,10 @@ const CollapsibleSection = ({
       </div>
 
       {/* Content Area */}
-      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
-        isOpen
-          ? 'max-h-screen opacity-100 mt-4'
+      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen
+          ? 'max-h-[5000px] opacity-100 mt-4'
           : 'max-h-0 opacity-0'
-      }`}>
+        }`}>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-6">
           {children}
         </div>

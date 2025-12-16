@@ -9,11 +9,13 @@ const FileUpload = ({
   optionalFiles,
   setOptionalFiles,
   englishProficiencyMethod,
-  validationErrors = []
+  validationErrors = [],
+  studentOrigin,
+  visaResidentName
 }) => {
   // Check if running in production mode
   const isProduction = process.env.NODE_ENV === 'production' ||
-                       process.env.REACT_APP_PRODUCTION_MODE === 'true';
+    process.env.REACT_APP_PRODUCTION_MODE === 'true';
 
   const handleFileUpload = (fileKey, isRequired = true) => (event) => {
     const file = event.target.files[0];
@@ -65,13 +67,12 @@ const FileUpload = ({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           title={`Upload ${label}`}
         />
-        <div className={`w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${
-          file
-            ? 'border-green-400 bg-green-50'
-            : hasError
+        <div className={`w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${file
+          ? 'border-green-400 bg-green-50'
+          : hasError
             ? 'border-red-400 bg-red-50'
             : 'border-gray-300 hover:border-primary-blue hover:bg-blue-50'
-        }`}>
+          }`}>
           {file ? (
             <File size={32} className="text-green-600" />
           ) : (
@@ -105,15 +106,33 @@ const FileUpload = ({
     </div>
   );
 
+  const getProofOfIdentityLabel = () => {
+    if (studentOrigin === 'ResidentStudent') {
+      return 'Proof of Identity (Passport, Medicare, or Centrelink Card)';
+    }
+    return 'Current Passport';
+  };
+
   const getEnglishTestLabel = () => {
     return englishProficiencyMethod === 'ELICOS Training' ? 'ELICOS Training Offer' : 'English Test Results';
   };
 
+  // Group A Visa Types (Single Document)
+  const groupAVisas = ['Australian Citizen', 'Business Migration Visa', 'New Zealand Citizen'];
+
+  // Determine if Visa Document is required for Resident Students
+  const isVisaDocumentRequired = studentOrigin === 'ResidentStudent' &&
+    visaResidentName &&
+    !groupAVisas.includes(visaResidentName);
+
   const requiredFileConfigs = [
-    { key: 'year12Evidence', label: 'Evidence of Year 12 or Vocational Education' },
-    { key: 'passport', label: 'Current Passport' },
-    { key: 'englishTest', label: getEnglishTestLabel() },
-    { key: 'academicQualifications', label: 'Academic Qualifications & Transcripts' }
+    ...(studentOrigin !== 'ResidentStudent' ? [{ key: 'year12Evidence', label: 'Evidence of Year 12 or Vocational Education' }] : []),
+    { key: 'passport', label: getProofOfIdentityLabel() },
+    ...(isVisaDocumentRequired ? [{ key: 'visaDocument', label: 'Visa (Vevo Check completed within 2 days)' }] : []),
+    ...(studentOrigin !== 'ResidentStudent' ? [
+      { key: 'englishTest', label: getEnglishTestLabel() },
+      { key: 'academicQualifications', label: 'Academic Qualifications & Transcripts' }
+    ] : [])
   ];
 
   // Check which files have errors

@@ -258,9 +258,20 @@ export const fetchCourseIntakes = async (params = {}) => {
         const intakeDate = new Date(intake.IntakeDate);
         const isFuture = intakeDate >= today;
         const isPublished = intake.IsPublished;
-        const matchesCourse = !courseId || intake.CourseId === courseId;
+        // Normalize for comparison
+        const normalizedCourseId = courseId ? courseId.trim().toUpperCase() : '';
+        const intakeCourseId = intake.CourseId ? intake.CourseId.trim().toUpperCase() : '';
+        const intakeCourseCode = intake.CourseCode ? intake.CourseCode.trim().toUpperCase() : '';
 
-        console.log(`📅 检查入学日期: ${intake.IntakeDate}, 未来: ${isFuture}, 已发布: ${isPublished}, 课程: ${intake.CourseId}, 校区: ${intake.CampusId}`);
+        // Match against CourseId or CourseCode (handling potential API field variance)
+        const matchesCourse = !normalizedCourseId ||
+          intakeCourseId === normalizedCourseId ||
+          intakeCourseCode === normalizedCourseId;
+
+        // Debug logging for mismatch analysis
+        if (!matchesCourse && isFuture) {
+          console.log(`❌ 过滤掉不匹配课程: IntakeCourse=${intakeCourseId}, TargetCourse=${normalizedCourseId}`);
+        }
 
         // 优先显示已发布的未来日期，如果没有已发布的，则显示所有未来日期
         return isFuture && matchesCourse; // 暂时不强制要求发布状态
