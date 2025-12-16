@@ -172,7 +172,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
       3: ['isAboriginal', 'isTorresStraitIslander', 'isEnglishMainLanguage', 'wasEnglishInstructionLanguage', 'hasCompletedEnglishTest', 'highestSchoolLevel', 'isStillAttendingSchool', 'hasAchievedQualifications', 'currentEmploymentStatus', 'industryOfEmployment', 'occupationIdentifier'],
       4: ['howDidYouHearAboutUs', 'selectedCourse', 'selectedIntake', 'agreeToTerms']
     };
-  }, [showAgentSelect, isInternationalStudent, shouldShowOverseasAddressQuestion]);
+  }, [showAgentSelect, isInternationalStudent, shouldShowOverseasAddressQuestion, isResidentStudent]);
 
   // 确保页面加载时滚动到顶部
   useEffect(() => {

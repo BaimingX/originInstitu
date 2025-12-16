@@ -257,7 +257,7 @@ export const fetchCourseIntakes = async (params = {}) => {
         // 只显示未来的入学日期（发布状态可选，因为后端数据可能未设置）
         const intakeDate = new Date(intake.IntakeDate);
         const isFuture = intakeDate >= today;
-        const isPublished = intake.IsPublished;
+        // const isPublished = intake.IsPublished;
         // Normalize for comparison
         const normalizedCourseId = courseId ? courseId.trim().toUpperCase() : '';
         const intakeCourseId = intake.CourseId ? intake.CourseId.trim().toUpperCase() : '';
