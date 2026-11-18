@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ServerCog } from 'lucide-react';
 import logoImage from '../image/Origin_logo.jpg';
 
 const HomePage = ({ onNavigate }) => {
+  const showApiConnectivityEntry =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.REACT_APP_PRODUCTION_MODE === 'false';
   const [scrollY, setScrollY] = useState(0);
   const [showButtons, setShowButtons] = useState(false);
   const [currentSection, setCurrentSection] = useState(0);
@@ -282,6 +286,17 @@ const HomePage = ({ onNavigate }) => {
           </p>
         </div>
       </div>
+
+      {showApiConnectivityEntry && (
+        <button
+          type="button"
+          onClick={() => onNavigate('api-connectivity')}
+          className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-lg border border-teal-200 bg-white px-4 py-3 text-sm font-semibold text-teal-700 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:bg-teal-50 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+        >
+          <ServerCog size={18} />
+          <span>API Connectivity</span>
+        </button>
+      )}
     </div>
   );
 };

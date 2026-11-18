@@ -22,6 +22,7 @@ import { submitOfferWithValidation } from '../../services/cricosApiService';
 import { fetchCourseIntakes, getDefaultIntakeOptions } from '../../services/courseIntakeService';
 import SubmissionProgressModal from '../SubmissionProgressModal';
 import ApiTester from '../ApiTester';
+import MeshedApiTester from '../MeshedApiTester';
 import PowerAutomateValidator from '../PowerAutomateValidator';
 import toast from 'react-hot-toast';
 
@@ -101,6 +102,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
   const [apiResponseData, setApiResponseData] = useState(null);
   const [showApiDebug, setShowApiDebug] = useState(false);
   const [showApiTester, setShowApiTester] = useState(false);
+  const [showMeshedApiTester, setShowMeshedApiTester] = useState(false);
   const [showPowerAutomateValidator, setShowPowerAutomateValidator] = useState(false);
   const [showJsonPreview, setShowJsonPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
@@ -2150,7 +2152,7 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                       className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors font-medium text-sm"
                       disabled={isSubmitting || isTestValidating}
                     >
-                      {isTestValidating ? 'Testing...' : 'Test Validation'}
+                      {isTestValidating ? 'Testing...' : 'Test Validation (CRICOS)'}
                     </button>
 
                     {/* Power Automate Validator Button */}
@@ -2179,6 +2181,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
                       className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
                     >
                       🧪 API Tester
+                    </button>
+
+                    {/* Meshed API Tester Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowMeshedApiTester(true)}
+                      className="w-full bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
+                    >
+                      Meshed API Tester
                     </button>
 
                     {/* View Last Validation Errors Button */}
@@ -2440,6 +2451,15 @@ const PersonalInfoForm = ({ onBackToHome, showAgentSelect = false }) => {
           isOpen={showApiTester}
           onClose={() => setShowApiTester(false)}
         />
+
+        {/* Meshed API Tester Modal */}
+        {!isProduction && (
+          <MeshedApiTester
+            isOpen={showMeshedApiTester}
+            onClose={() => setShowMeshedApiTester(false)}
+            getCurrentJsonPreview={() => previewJSON(getValues())}
+          />
+        )}
 
         {/* Power Automate Validator Modal */}
         <PowerAutomateValidator

@@ -4,10 +4,14 @@ import PersonalInfoForm from './components/FormComponents/PersonalInfoForm';
 import AgentApplicationForm from './components/FormComponents/AgentApplicationForm';
 import HomePage from './components/HomePage';
 import AgentPage from './components/AgentPage';
+import ApiConnectivityPage from './components/ApiConnectivityPage';
 import './App.css';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
+  const showApiConnectivityPage =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.REACT_APP_PRODUCTION_MODE === 'false';
 
   // 禁用浏览器的滚动恢复功能
   useEffect(() => {
@@ -20,7 +24,7 @@ function App() {
   useEffect(() => {
     // 立即滚动到顶部
     window.scrollTo(0, 0);
-    
+
     // 延迟再次滚动，对抗浏览器的滚动恢复机制
     const timeouts = [
       setTimeout(() => window.scrollTo(0, 0), 10),
@@ -28,7 +32,7 @@ function App() {
       setTimeout(() => window.scrollTo(0, 0), 100),
       setTimeout(() => window.scrollTo(0, 0), 200)
     ];
-    
+
     // 清理定时器
     return () => {
       timeouts.forEach(timeout => clearTimeout(timeout));
@@ -45,6 +49,10 @@ function App() {
         return <AgentPage onNavigate={setCurrentPage} onBackToHome={() => setCurrentPage('home')} />;
       case 'new-agent':
         return <AgentApplicationForm onBackToHome={() => setCurrentPage('agent')} />;
+      case 'api-connectivity':
+        return showApiConnectivityPage
+          ? <ApiConnectivityPage onBackToHome={() => setCurrentPage('home')} />
+          : <HomePage onNavigate={setCurrentPage} />;
       default:
         return <HomePage onNavigate={setCurrentPage} />;
     }
